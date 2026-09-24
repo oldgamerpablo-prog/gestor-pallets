@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -477,6 +476,9 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas)
 # 5. MÓDULOS DE PÁGINAS (UI)
 # ============================================================
 
+def cambiar_menu(pagina):
+    st.session_state.menu_seleccion = pagina
+
 def mostrar_portada():
     st.markdown("""
     <div style="background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%); padding: 80px 20px; border-radius: 15px; text-align: center; color: white; margin-bottom: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);">
@@ -484,40 +486,25 @@ def mostrar_portada():
         <p style="font-size: 1.3rem; color: #cbd5e1; max-width: 800px; margin: 0 auto; line-height: 1.6;">Plataforma integral de ingeniería logística para la optimización de almacenamiento, cubicación geométrica y diseño avanzado de layout de bodegas.</p>
     </div>
     """, unsafe_allow_html=True)
-
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("""
-        <div style="background: white; padding: 30px 30px 10px 30px; border-radius: 12px 12px 0 0; border: 1px solid #e2e8f0; border-bottom: none;">
-            <div style="font-size: 3rem; margin-bottom: 15px;">📦</div>
-            <h2 style="color: #0f172a; margin-top: 0; font-weight: 800;">Cubicadora de Pallets</h2>
-            <p style="color: #475569; font-size: 1.1rem; line-height: 1.5;">Optimiza la estiba de productos, calcula capacidades y genera renders 2D y 3D interactivos.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("🚀 Ingresar a Cubicadora", key="btn_cub", type="primary", use_container_width=True):
-            st.session_state.menu_seleccion = "📦 Cubicadora WMS"
-            st.rerun()
-    
+        st.markdown("""<div style="background: white; padding: 40px; border-radius: 12px; border: 1px solid #e2e8f0; height: 100%; margin-bottom:10px;">
+            <div style="font-size: 3rem; margin-bottom: 15px;">📦</div><h2 style="color: #0f172a; margin-top: 0; font-weight: 800;">Cubicadora de Pallets</h2>
+            <p style="color: #475569; font-size: 1.1rem;">Optimiza la estiba de productos, calcula capacidades y genera renders 2D/3D.</p></div>""", unsafe_allow_html=True)
+        st.button("🚀 Ingresar a Cubicadora", key="btn_cub", type="primary", use_container_width=True, on_click=cambiar_menu, args=("📦 Cubicadora WMS",))
     with col2:
-        st.markdown("""
-        <div style="background: white; padding: 30px 30px 10px 30px; border-radius: 12px 12px 0 0; border: 1px solid #e2e8f0; border-bottom: none;">
-            <div style="font-size: 3rem; margin-bottom: 15px;">🏗️</div>
-            <h2 style="color: #0f172a; margin-top: 0; font-weight: 800;">Layout de Bodega</h2>
-            <p style="color: #475569; font-size: 1.1rem; line-height: 1.5;">Mapeo visual de almacén, optimización de espacios y validación matemática contra demanda.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        if st.button("🚀 Ingresar a Layout", key="btn_lay", type="primary", use_container_width=True):
-            st.session_state.menu_seleccion = "🏗️ Layout de Bodega"
-            st.rerun()
+        st.markdown("""<div style="background: white; padding: 40px; border-radius: 12px; border: 1px solid #e2e8f0; height: 100%; margin-bottom:10px;">
+            <div style="font-size: 3rem; margin-bottom: 15px;">🏗️</div><h2 style="color: #0f172a; margin-top: 0; font-weight: 800;">Layout de Bodega</h2>
+            <p style="color: #475569; font-size: 1.1rem;">Mapeo de almacén, optimización de rutas y validación matemática contra demanda.</p></div>""", unsafe_allow_html=True)
+        st.button("🚀 Ingresar a Layout", key="btn_lay", type="primary", use_container_width=True, on_click=cambiar_menu, args=("🏗️ Layout de Bodega",))
 
 def mostrar_cubicadora():
     st.markdown(css_styles, unsafe_allow_html=True)
     st.title("📦 Cubicadora de Palletización Masiva")
 
-    archivo_subido = st.file_uploader("📂 Sube tu archivo Excel con la base de datos (Ej: cubicadora pablo.xlsx)", type=["xlsx"])
-
+    archivo_subido = st.file_uploader("📂 Sube tu archivo Excel con la base de datos", type=["xlsx"])
     if archivo_subido is not None:
-        with st.spinner("Procesando toda la base de datos..."):
+        with st.spinner("Procesando base de datos..."):
             try: df_original = pd.read_excel(archivo_subido, sheet_name="Data Equipo 7")
             except: df_original = pd.read_excel(archivo_subido, sheet_name=0)
             df_res, MAPA = procesar_datos(df_original.dropna(how="all").reset_index(drop=True))
@@ -666,7 +653,6 @@ def mostrar_layout():
         if dif >= 0: st.success(f"✔️ ¡ÉXITO! Caben todos y sobran {dif:,} posiciones. (Capacidad: {res['capacidad']:,} | Demanda: {res['demanda']:,})")
         else: st.error(f"⚠️ ¡ALERTA! Faltan {abs(dif):,} posiciones. (Capacidad: {res['capacidad']:,} | Demanda: {res['demanda']:,})")
 
-        # PLOTLY 2D
         l_m, a_m, w_puerta, flujo = st.session_state.l_bod, st.session_state.a_bod, st.session_state.ancho_porton, st.session_state.tipo_flujo
         fig_2d = go.Figure()
         fig_2d.add_shape(type="rect", x0=0, y0=0, x1=l_m, y1=a_m, line=dict(color="#2c3e50", width=4), fillcolor="#fafafa")
@@ -710,17 +696,28 @@ def mostrar_layout():
         fig_2d.update_layout(title="Plano CAD 2D del Centro de Distribución", xaxis=dict(range=[-2, l_m+2]), yaxis=dict(range=[-2, a_m+2], scaleanchor="x", scaleratio=1), height=600, margin=dict(l=0, r=0, t=40, b=0))
         st.plotly_chart(fig_2d, use_container_width=True)
 
+        st.markdown("<hr>", unsafe_allow_html=True)
+        mostrar_3d_layout = st.toggle("🧊 Cargar Gemelo Digital 3D (Puede tardar unos segundos dependiendo del tamaño de tu bodega)")
+        
+        if mostrar_3d_layout:
+            with st.spinner("Construyendo Mallas 3D de la Bodega..."):
+                fig_3d = generar_layout_3d(res, l_m, a_m, st.session_state.alt_bod, is_vert, skus_buscados, puertas)
+                st.plotly_chart(fig_3d, use_container_width=True)
+
 # ============================================================
 # 6. MENÚ DE NAVEGACIÓN PRINCIPAL (SIDEBAR)
 # ============================================================
 
-st.sidebar.radio(
+# Se usa un selectbox o radio que lee de la sesión pero actualiza también
+menu_opciones = ["🏠 Portada Principal", "📦 Cubicadora WMS", "🏗️ Layout de Bodega"]
+st.session_state.menu_seleccion = st.sidebar.radio(
     "Navegación", 
-    ["🏠 Portada Principal", "📦 Cubicadora WMS", "🏗️ Layout de Bodega"],
-    key="menu_seleccion"
+    menu_opciones,
+    index=menu_opciones.index(st.session_state.menu_seleccion)
 )
+
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v3.2")
+st.sidebar.caption("WMS Analytics Hub v3.3")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
