@@ -39,6 +39,7 @@ for k, v in parametros_layout.items():
     if k not in st.session_state: st.session_state[k] = v
 
 if "layout_generado" not in st.session_state: st.session_state.layout_generado = False
+if "mostrar_3d_layout" not in st.session_state: st.session_state.mostrar_3d_layout = False
 
 css_styles = """
 <style>
@@ -48,12 +49,6 @@ css_styles = """
     .cota-linea { border-left: 1px solid #64748b; border-right: 1px solid #64748b; background-image: linear-gradient(#64748b, #64748b); background-size: 100% 1px; background-position: center; }
     .cota-linea-v { border-top: 1px solid #64748b; border-bottom: 1px solid #64748b; background-image: linear-gradient(#64748b, #64748b); background-size: 1px 100%; background-position: center; flex-direction: column; }
     .cota-texto { background: white; padding: 2px 4px; border-radius: 3px; z-index: 2; }
-    .module-card { background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 20px rgba(0,0,0,0.08); transition: transform 0.3s ease, box-shadow 0.3s ease; border: 1px solid #e2e8f0; height: 100%; margin-bottom: 15px; }
-    .module-card:hover { transform: translateY(-5px); box-shadow: 0 15px 30px rgba(0,0,0,0.15); }
-    .module-img { width: 100%; height: 180px; object-fit: cover; }
-    .module-content { padding: 25px; }
-    .module-title { margin-top: 0; color: #0f172a; font-weight: 800; font-size: 1.5rem; display: flex; align-items: center; gap: 10px; }
-    .module-desc { color: #475569; font-size: 1.05rem; line-height: 1.5; margin-bottom: 0; }
 </style>
 """
 
@@ -285,10 +280,7 @@ def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
                 cx, cy = c['x'] + c['largo']/2, c['y'] + c['ancho']/2
                 traces.append(crear_cilindro_solido_cm(cx, cy, z_base, radio - 0.2, alto - 0.5, color_carga))
                 theta = np.linspace(0, 2*np.pi, 24)
-                traces.append(go.Scatter3d(
-                    x=cx + (radio - 0.2) * np.cos(theta), y=cy + (radio - 0.2) * np.sin(theta), z=np.full(24, z_base + alto - 0.5),
-                    mode='lines', line=dict(color='#1e3a8a', width=3), showlegend=False, hoverinfo='none'
-                ))
+                traces.append(go.Scatter3d(x=cx + (radio - 0.2) * np.cos(theta), y=cy + (radio - 0.2) * np.sin(theta), z=np.full(24, z_base + alto - 0.5), mode='lines', line=dict(color='#1e3a8a', width=3), showlegend=False, hoverinfo='none'))
             else:
                 gap = 0.5
                 x_c, y_c = c['x'] + gap/2, c['y'] + gap/2
@@ -489,71 +481,97 @@ def cambiar_menu(pagina):
     st.session_state.menu_seleccion = pagina
 
 def mostrar_portada():
-    st.markdown(css_styles, unsafe_allow_html=True)
-    
-    # HERO BANNER (Cabecera impactante)
+    # Estilos avanzados para tarjetas
     st.markdown("""
-    <div style="position: relative; width: 100%; height: 380px; border-radius: 15px; overflow: hidden; margin-bottom: 40px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
-        <img src="https://images.unsplash.com/photo-1586528116311-ad8ed7c663e0?ixlib=rb-4.0.3&auto=format&fit=crop&w=2000&q=80" style="width: 100%; height: 100%; object-fit: cover; filter: brightness(0.35);">
-        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; width: 100%;">
-            <h1 style="font-size: 4.5rem; font-weight: 900; color: white; margin: 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); letter-spacing: -1px;">WMS Analytics Hub</h1>
-            <p style="font-size: 1.5rem; color: #e2e8f0; text-shadow: 1px 1px 3px rgba(0,0,0,0.8); margin-top: 10px;">Centro de Control e Inteligencia Logística Avanzada</p>
+    <style>
+        .hero-box {
+            position: relative; width: 100%; height: 350px; border-radius: 12px; overflow: hidden; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+        .hero-img {
+            width: 100%; height: 100%; object-fit: cover; filter: brightness(0.4) contrast(1.1);
+        }
+        .hero-text {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; width: 90%;
+        }
+        .card-custom {
+            background: white; border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0; height: 100%; display: flex; flex-direction: column;
+        }
+        .card-img {
+            width: 100%; height: 180px; object-fit: cover; border-bottom: 3px solid #1e3a8a;
+        }
+        .card-body {
+            padding: 20px; flex-grow: 1;
+        }
+        .card-title {
+            color: #0f172a; font-weight: 800; font-size: 1.4rem; margin-top: 0; margin-bottom: 10px;
+        }
+        .card-desc {
+            color: #475569; font-size: 0.95rem; line-height: 1.5;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # HERO BANNER CINEMATOGRÁFICO
+    st.markdown("""
+    <div class="hero-box">
+        <img src="https://images.pexels.com/photos/2449454/pexels-photo-2449454.jpeg?auto=compress&cs=tinysrgb&w=1600" class="hero-img">
+        <div class="hero-text">
+            <h1 style="font-size: 4.5rem; font-weight: 900; color: white; margin: 0; letter-spacing: 2px;">THE FUTURE OF <span style="color: #f39c12;">LOGISTICS</span></h1>
+            <p style="font-size: 1.3rem; color: #e2e8f0; margin-top: 10px; font-weight: 300;">WMS Analytics Hub • Advanced Engineering & Layout Optimization</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    # GRID DE 4 MÓDULOS
-    st.markdown("<h2 style='color:#0f172a; font-weight:800; margin-bottom: 20px; border-bottom: 3px solid #e2e8f0; padding-bottom: 10px;'>Módulos Disponibles</h2>", unsafe_allow_html=True)
+    # MATRIZ DE MÓDULOS
+    c1, c2 = st.columns(2)
     
-    # FILA 1
-    col1, col2 = st.columns(2)
-    with col1:
+    with c1:
         st.markdown("""
-        <div class="module-card">
-            <img src="https://images.unsplash.com/photo-1604046522511-df8a2119eb34?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" class="module-img">
-            <div class="module-content">
-                <h3 class="module-title">📦 Cubicadora de Pallets</h3>
-                <p class="module-desc">Herramienta algorítmica para optimizar la estiba. Calcula capacidades y genera renders 2D/3D al instante.</p>
+        <div class="card-custom" style="margin-bottom: 10px;">
+            <img src="https://images.pexels.com/photos/4481258/pexels-photo-4481258.jpeg?auto=compress&cs=tinysrgb&w=800" class="card-img">
+            <div class="card-body">
+                <h3 class="card-title">📦 Cubicadora de Pallets</h3>
+                <p class="card-desc">Herramienta algorítmica para la optimización geométrica de la estiba. Calcula capacidades máximas y genera renders 3D para la operación.</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        st.button("⚙️ Ingresar a Cubicadora", key="btn_cub", type="primary", use_container_width=True, on_click=cambiar_menu, args=("📦 Cubicadora WMS",))
+        st.button("Acceder a Cubicadora", key="btn_cub", use_container_width=True, on_click=cambiar_menu, args=("📦 Cubicadora WMS",))
         st.markdown("<br>", unsafe_allow_html=True)
 
-    with col2:
+    with c2:
         st.markdown("""
-        <div class="module-card">
-            <img src="https://images.unsplash.com/photo-1504307651254-35680f356f27?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" class="module-img">
-            <div class="module-content">
-                <h3 class="module-title">🏗️ Layout de Bodega</h3>
-                <p class="module-desc">Mapeo de almacén, optimización de espacios, rutas de picking y validación matemática contra demanda real.</p>
+        <div class="card-custom" style="margin-bottom: 10px;">
+            <img src="https://images.pexels.com/photos/11081023/pexels-photo-11081023.jpeg?auto=compress&cs=tinysrgb&w=800" class="card-img" style="border-bottom-color: #27ae60;">
+            <div class="card-body">
+                <h3 class="card-title">🏗️ Layout de Bodega</h3>
+                <p class="card-desc">Simulador espacial para el diseño de centros de distribución. Valida configuraciones de racks contra demanda real mediante Inteligencia Artificial.</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        st.button("⚙️ Ingresar a Layout", key="btn_lay", type="primary", use_container_width=True, on_click=cambiar_menu, args=("🏗️ Layout de Bodega",))
+        st.button("Acceder a Layout", key="btn_lay", use_container_width=True, on_click=cambiar_menu, args=("🏗️ Layout de Bodega",))
         st.markdown("<br>", unsafe_allow_html=True)
 
-    # FILA 2 (Los nuevos)
-    col3, col4 = st.columns(2)
-    with col3:
+    c3, c4 = st.columns(2)
+
+    with c3:
         st.markdown("""
-        <div class="module-card" style="opacity: 0.85;">
-            <img src="https://images.unsplash.com/photo-1580674285054-bed31e145f59?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" class="module-img" style="filter: grayscale(40%);">
-            <div class="module-content">
-                <h3 class="module-title" style="color: #475569;">📥 Entrada de Mercadería</h3>
-                <p class="module-desc">Gestión inteligente de inbound, asignación de andenes y priorización de descarga.</p>
+        <div class="card-custom" style="margin-bottom: 10px; opacity: 0.85;">
+            <img src="https://images.pexels.com/photos/220072/pexels-photo-220072.jpeg?auto=compress&cs=tinysrgb&w=800" class="card-img" style="border-bottom-color: #f39c12; filter: grayscale(50%);">
+            <div class="card-body">
+                <h3 class="card-title" style="color: #475569;">📥 Entrada de Mercadería (Inbound)</h3>
+                <p class="card-desc">Planificador táctico para la gestión de andenes, recepción de proveedores y cross-docking.</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        st.button("🔒 Próximamente", key="btn_inb", disabled=True, use_container_width=True)
+        st.button("🔒 Próximamente", key="btn_in", disabled=True, use_container_width=True)
 
-    with col4:
+    with c4:
         st.markdown("""
-        <div class="module-card" style="opacity: 0.85;">
-            <img src="https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" class="module-img" style="filter: grayscale(40%);">
-            <div class="module-content">
-                <h3 class="module-title" style="color: #475569;">📤 Salida de Mercadería</h3>
-                <p class="module-desc">Planificación de outbound, cubicaje de camiones y consolidación de pedidos.</p>
+        <div class="card-custom" style="margin-bottom: 10px; opacity: 0.85;">
+            <img src="https://images.pexels.com/photos/2199293/pexels-photo-2199293.jpeg?auto=compress&cs=tinysrgb&w=800" class="card-img" style="border-bottom-color: #e74c3c; filter: grayscale(50%);">
+            <div class="card-body">
+                <h3 class="card-title" style="color: #475569;">📤 Salida de Mercadería (Outbound)</h3>
+                <p class="card-desc">Consolidador de pedidos, asignación de bahías de despacho y cubicaje avanzado de camiones.</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -767,21 +785,11 @@ def mostrar_layout():
                 fig_3d = generar_layout_3d(res, l_m, a_m, st.session_state.alt_bod, is_vert, skus_buscados, puertas)
                 st.plotly_chart(fig_3d, use_container_width=True)
 
-def mostrar_inbound():
-    st.title("📥 Entrada de Mercadería (Inbound)")
-    st.info("Módulo en construcción. Aquí gestionaremos andenes, descarga y recepción.")
-    st.image("https://images.unsplash.com/photo-1580674285054-bed31e145f59?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80", use_column_width=True)
-
-def mostrar_outbound():
-    st.title("📤 Salida de Mercadería (Outbound)")
-    st.info("Módulo en construcción. Aquí gestionaremos consolidación, cubicaje de camiones y despacho.")
-    st.image("https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80", use_column_width=True)
-
 # ============================================================
 # 6. MENÚ DE NAVEGACIÓN PRINCIPAL (SIDEBAR)
 # ============================================================
 
-menu_opciones = ["🏠 Portada Principal", "📦 Cubicadora WMS", "🏗️ Layout de Bodega", "📥 Entrada Mercadería", "📤 Salida Mercadería"]
+menu_opciones = ["🏠 Portada Principal", "📦 Cubicadora WMS", "🏗️ Layout de Bodega"]
 st.session_state.menu_seleccion = st.sidebar.radio(
     "Navegación", 
     menu_opciones,
@@ -789,10 +797,8 @@ st.session_state.menu_seleccion = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v4.0")
+st.sidebar.caption("WMS Analytics Hub v4.0 • Enterprise Edition")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
 elif st.session_state.menu_seleccion == "🏗️ Layout de Bodega": mostrar_layout()
-elif st.session_state.menu_seleccion == "📥 Entrada Mercadería": mostrar_inbound()
-elif st.session_state.menu_seleccion == "📤 Salida Mercadería": mostrar_outbound()
