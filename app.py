@@ -164,6 +164,27 @@ def calcular_metricas_dinamicas(fila, mapa, modo="EXCEL"):
     elif es_numero(peso_pallet) and peso_pallet > MAX_PESO_PALLET: estado = "🚨 SOBREPESO (>1200kg)"
     return {"Capacidad_Usada": cap_usada, "Pallets": pallets, "Unidades_Ultimo": ult_unids, "Ocupacion_Ultimo": ult_pct, "Peso_Pallet": peso_pallet, "Estado": estado, "Cap_Excel": cap_excel, "Cap_Optima": cap_optima}
 
+# === ESTA ES LA FUNCIÓN QUE FALTABA Y CAUSABA EL ERROR ===
+def generar_excel_descarga(df_original, df_resultados, mapa):
+    output = io.BytesIO()
+    comparativo_rows = []
+    for _, row in df_resultados.iterrows():
+        m_excel = calcular_metricas_dinamicas(row, mapa, "EXCEL")
+        m_opt = calcular_metricas_dinamicas(row, mapa, "OPTIMO")
+        comparativo_rows.append({
+            "SKU": row[mapa["sku"]], "Stock": row[mapa["stock"]],
+            "Capacidad_Excel": m_excel["Cap_Excel"], "Capacidad_Optima": m_opt["Cap_Optima"],
+            "Pallets_Req_Excel": m_excel["Pallets"], "Pallets_Req_Optimo": m_opt["Pallets"]
+        })
+    df_sheet1 = pd.DataFrame(comparativo_rows)
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df_sheet1.to_excel(writer, sheet_name="1_Analisis_Comparativo", index=False)
+        df_original.copy().to_excel(writer, sheet_name="2_Data_Original", index=False)
+        df_resultados.to_excel(writer, sheet_name="3_Data_Optimizada", index=False)
+    output.seek(0)
+    return output
+# ==========================================================
+
 # ============================================================
 # 3. FUNCIONES VISUALES 2D / 3D (CUBICADORA)
 # ============================================================
@@ -239,11 +260,14 @@ def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
     target_units = int(cap_usada) if total_unidades is None else int(total_unidades)
     layout = mejor_distribucion_filas(largo, ancho, lp, ap)
     if layout["cantidad"] <= 0 or target_units <= 0: return go.Figure()
+    
     traces = []
     h_deck, h_leg, w_leg = min(3.0, hp * 0.2), hp - min(3.0, hp * 0.2), min(10.0, lp * 0.1)
     traces.extend([get_box_cm(0, 0, h_leg, lp, ap, h_deck, '#c18c5d'), get_box_cm(0, 0, 0, w_leg, ap, h_leg, '#966336'), get_box_cm((lp - w_leg)/2, 0, 0, w_leg, ap, h_leg, '#966336'), get_box_cm(lp - w_leg, 0, 0, w_leg, ap, h_leg, '#966336')])
+    
     es_cilindro = es_formato_circular(valor_col(fila, "formato", mapa))
     color_carga = '#2563eb' if es_cilindro else '#d4a373'
+    
     units_placed, nivel = 0, 0
     while units_placed < target_units:
         z_base = hp + (nivel * alto)
@@ -254,7 +278,10 @@ def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
                 cx, cy = c['x'] + c['largo']/2, c['y'] + c['ancho']/2
                 traces.append(crear_cilindro_solido_cm(cx, cy, z_base, radio - 0.2, alto - 0.5, color_carga))
                 theta = np.linspace(0, 2*np.pi, 24)
-                traces.append(go.Scatter3d(x=cx + (radio - 0.2) * np.cos(theta), y=cy + (radio - 0.2) * np.sin(theta), z=np.full(24, z_base + alto - 0.5), mode='lines', line=dict(color='#1e3a8a', width=3), showlegend=False, hoverinfo='none'))
+                traces.append(go.Scatter3d(
+                    x=cx + (radio - 0.2) * np.cos(theta), y=cy + (radio - 0.2) * np.sin(theta), z=np.full(24, z_base + alto - 0.5),
+                    mode='lines', line=dict(color='#1e3a8a', width=3), showlegend=False, hoverinfo='none'
+                ))
             else:
                 gap = 0.5
                 x_c, y_c = c['x'] + gap/2, c['y'] + gap/2
@@ -264,9 +291,12 @@ def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
                 x_e = [x_c, x_c+l_c, x_c+l_c, x_c, x_c, None, x_c, x_c+l_c, x_c+l_c, x_c, x_c, None, x_c, x_c, None, x_c+l_c, x_c+l_c, None, x_c+l_c, x_c+l_c, None, x_c, x_c]
                 y_e = [y_c, y_c, y_c+a_c, y_c+a_c, y_c, None, y_c, y_c, y_c+a_c, y_c+a_c, y_c, None, y_c, y_c, None, y_c, y_c, None, y_c+a_c, y_c+a_c, None, y_c+a_c, y_c+a_c]
                 z_e = [z_base, z_base, z_base, z_base, z_base, None, z_base+alt_c, z_base+alt_c, z_base+alt_c, z_base+alt_c, z_base+alt_c, None, z_base, z_base+alt_c, None, z_base, z_base+alt_c, None, z_base, z_base+alt_c, None, z_base, z_base+alt_c]
-                traces.append(go.Scatter3d(x=x_e, y=y_e, z=z_e, mode='lines', line=dict(color='#8b5a2b', width=2), showlegend=False, hoverinfo='none'))
+                traces.append(go.Scatter3d(
+                    x=x_e, y=y_e, z=z_e, mode='lines', line=dict(color='#8b5a2b', width=2), showlegend=False, hoverinfo='none'
+                ))
             units_placed += 1
         nivel += 1
+        
     fig = go.Figure(data=traces)
     fig.update_layout(scene=dict(xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False), aspectmode='data', camera=dict(eye=dict(x=1.6, y=1.6, z=1.0))), margin=dict(r=0, l=0, b=0, t=0), height=300)
     return fig
@@ -342,24 +372,6 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
         'almacen': almacen, 'pilares_reales': pilares_reales
     }
 
-class MallaAgrupada:
-    def __init__(self, color, nombre, opacidad=1.0):
-        self.color, self.nombre, self.opacidad = color, nombre, opacidad
-        self.x, self.y, self.z, self.i, self.j, self.k, self.contador = [], [], [], [], [], [], 0
-        self.base_i, self.base_j, self.base_k = [7,0,0,0,4,4,6,6,4,0,3,2], [3,4,1,2,5,6,5,2,0,1,6,3], [0,7,2,3,6,7,1,1,5,5,7,6]
-    def agregar_cubo(self, x0, y0, z0, dx, dy, dz):
-        off = self.contador * 8
-        self.x.extend([x0, x0+dx, x0+dx, x0, x0, x0+dx, x0+dx, x0])
-        self.y.extend([y0, y0, y0+dy, y0+dy, y0, y0, y0+dy, y0+dy])
-        self.z.extend([z0, z0, z0, z0, z0+dz, z0+dz, z0+dz, z0+dz])
-        self.i.extend([idx + off for idx in self.base_i])
-        self.j.extend([idx + off for idx in self.base_j])
-        self.k.extend([idx + off for idx in self.base_k])
-        self.contador += 1
-    def obtener_trazo(self):
-        if self.contador == 0: return None
-        return go.Mesh3d(x=self.x, y=self.y, z=self.z, i=self.i, j=self.j, k=self.k, color=self.color, opacity=self.opacidad, name=self.nombre, hoverinfo="name", showscale=False, flatshading=True)
-
 # ============================================================
 # 5. MÓDULOS DE PÁGINAS (UI)
 # ============================================================
@@ -405,7 +417,6 @@ def mostrar_cubicadora():
             except: df_original = pd.read_excel(archivo_subido, sheet_name=0)
             df_res, MAPA = procesar_datos(df_original.dropna(how="all").reset_index(drop=True))
             
-            # Guardamos en sesión para que Layout pueda usarlo
             st.session_state.df_original = df_original
             st.session_state.df_resultados = df_res
             st.session_state.mapa_columnas = MAPA
@@ -468,8 +479,22 @@ def mostrar_cubicadora():
         with tab_descargar:
             excel_data = generar_excel_descarga(st.session_state.df_original, df_resultados, MAPA)
             st.download_button("📊 Descargar Reporte Excel", data=excel_data, file_name="Reporte_Optimizacion.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            
+        with tab_alertas:
+            alertas = []
+            for _, row in df_resultados.iterrows():
+                m = calcular_metricas_dinamicas(row, MAPA, modo)
+                if "❌" in m["Estado"] or "⚠️" in m["Estado"] or "🚨" in m["Estado"]:
+                    alertas.append({"SKU": row[MAPA["sku"]], "Estado": m["Estado"], "Stock": row[MAPA["stock"]], "Pallets": m["Pallets"]})
+            if alertas:
+                st.warning(f"Se encontraron {len(alertas)} SKUs con alertas.")
+                st.dataframe(pd.DataFrame(alertas), use_container_width=True)
+            else: st.success("🎉 ¡Excelente! No se encontraron problemas de sobrepeso ni falta de datos.")
+
+        with tab_datos:
+            st.dataframe(df_resultados, use_container_width=True)
     else:
-        st.warning("👆 Sube tu archivo Excel arriba para comenzar.")
+        st.info("👆 Sube tu archivo Excel arriba para comenzar.")
 
 def mostrar_layout():
     st.title("🏗️ Diseñador de Layout de Bodega")
@@ -478,12 +503,10 @@ def mostrar_layout():
         st.error("⚠️ Para usar el Layout, primero debes cargar el Excel en el módulo 'Cubicadora WMS'.")
         return
 
-    # Preparar df_layout (Demanda)
     df_orig = st.session_state.df_original.copy()
     df_res = st.session_state.df_resultados.copy()
     MAPA = st.session_state.mapa_columnas
 
-    # Demandas
     df_layout_orig = pd.DataFrame()
     df_layout_orig['SKU'] = df_orig[MAPA['sku']]
     stock_op = pd.to_numeric(df_orig[MAPA['stock']], errors='coerce').fillna(0)
@@ -502,7 +525,6 @@ def mostrar_layout():
 
     dict_demanda = {'Data Original': df_layout_orig, 'Data Optimizada': df_layout_opt}
 
-    # PANEL MASTER UI
     with st.expander("⚙️ PANEL MASTER CD (Configuración de Bodega)", expanded=True):
         col_inf, col_dr, col_op, col_an = st.columns(4)
         
@@ -561,10 +583,8 @@ def mostrar_layout():
                         st.success(f"🧠 IA Aplicada: {mejor['fuente']}, {'Vertical' if mejor['is_vertical'] else 'Horizontal'}, {mejor['pal_v']} por viga. Capacidad proyectada: {mejor['capacidad']:,}")
                         st.rerun()
 
-    # RESULTADOS LAYOUT
     if st.session_state.layout_generado:
         st.markdown("---")
-        # Preparar data
         raw = st.session_state.filtro_sublayout.strip()
         skus_buscados = set(s.strip().upper() for s in re.split(r'[\n,\t\r;]+', raw) if s.strip())
         is_filtrado = bool(skus_buscados and raw.upper() != 'TODOS')
@@ -575,12 +595,10 @@ def mostrar_layout():
         is_vert = ('Vertical' in st.session_state.orientacion_rack) if 'Automática' not in st.session_state.orientacion_rack else (st.session_state.tipo_flujo in ['Flujo en U', 'Flujo en I (Línea Recta)'])
         res = motor_calculo_layout(df_activa, is_vert, st.session_state.pallets_viga, st.session_state)
 
-        # KPI
         dif = res['diferencia']
         if dif >= 0: st.success(f"✔️ ¡ÉXITO! Caben todos y sobran {dif:,} posiciones. (Capacidad: {res['capacidad']:,} | Demanda: {res['demanda']:,})")
         else: st.error(f"⚠️ ¡ALERTA! Faltan {abs(dif):,} posiciones. (Capacidad: {res['capacidad']:,} | Demanda: {res['demanda']:,})")
 
-        # PLOTLY 2D
         l_m, a_m = st.session_state.l_bod, st.session_state.a_bod
         fig_2d = go.Figure()
         fig_2d.add_shape(type="rect", x0=0, y0=0, x1=l_m, y1=a_m, line=dict(color="#2c3e50", width=4), fillcolor="#fafafa")
@@ -608,8 +626,6 @@ def mostrar_layout():
 
         fig_2d.update_layout(title="Plano CAD 2D del Centro de Distribución", xaxis=dict(range=[-2, l_m+2]), yaxis=dict(range=[-2, a_m+2], scaleanchor="x", scaleratio=1), height=600, margin=dict(l=0, r=0, t=40, b=0))
         st.plotly_chart(fig_2d, use_container_width=True)
-
-        st.info("Nota: El renderizado del Gemelo Digital 3D a escala de bodega completa ha sido optimizado y estará disponible en la próxima actualización del motor WebGL.")
 
 # ============================================================
 # 6. MENÚ DE NAVEGACIÓN PRINCIPAL (SIDEBAR)
