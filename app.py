@@ -1,5 +1,4 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -164,7 +163,6 @@ def calcular_metricas_dinamicas(fila, mapa, modo="EXCEL"):
     elif es_numero(peso_pallet) and peso_pallet > MAX_PESO_PALLET: estado = "🚨 SOBREPESO (>1200kg)"
     return {"Capacidad_Usada": cap_usada, "Pallets": pallets, "Unidades_Ultimo": ult_unids, "Ocupacion_Ultimo": ult_pct, "Peso_Pallet": peso_pallet, "Estado": estado, "Cap_Excel": cap_excel, "Cap_Optima": cap_optima}
 
-# === ESTA ES LA FUNCIÓN QUE FALTABA Y CAUSABA EL ERROR ===
 def generar_excel_descarga(df_original, df_resultados, mapa):
     output = io.BytesIO()
     comparativo_rows = []
@@ -183,7 +181,6 @@ def generar_excel_descarga(df_original, df_resultados, mapa):
         df_resultados.to_excel(writer, sheet_name="3_Data_Optimizada", index=False)
     output.seek(0)
     return output
-# ==========================================================
 
 # ============================================================
 # 3. FUNCIONES VISUALES 2D / 3D (CUBICADORA)
@@ -463,20 +460,26 @@ def mostrar_cubicadora():
                         with col_der:
                             st.markdown(f"#### 📦 PALLET BASE ({m['Capacidad_Usada']} UNIDADES)")
                             c_pb1, c_pb2, c_pb3 = st.columns(3)
-                            with c_pb1: components.html(css_styles + html_vista_superior(fila, MAPA), height=300)
-                            with c_pb2: components.html(css_styles + html_vista_lateral(fila, MAPA, m['Capacidad_Usada']), height=300)
+                            
+                            # REEMPLAZO IMPORTANTE: Usamos st.markdown nativo sin iframes para velocidad infinita
+                            with c_pb1: st.markdown(html_vista_superior(fila, MAPA), unsafe_allow_html=True)
+                            with c_pb2: st.markdown(html_vista_lateral(fila, MAPA, m['Capacidad_Usada']), unsafe_allow_html=True)
                             with c_pb3:
                                 if mostrar_3d_sku: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada']), use_container_width=True, key=f"pb_{sku}")
+                            
                             st.markdown("---")
                             st.markdown(f"#### 🧩 ÚLTIMO PALLET ({m['Unidades_Ultimo']} UNIDADES | {m['Ocupacion_Ultimo']:.1f}%)")
                             c_ps1, c_ps2, c_ps3 = st.columns(3)
-                            with c_ps1: components.html(css_styles + html_vista_superior(fila, MAPA, m['Unidades_Ultimo']), height=300)
-                            with c_ps2: components.html(css_styles + html_vista_lateral(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Ultimo']), height=300)
+                            
+                            # REEMPLAZO IMPORTANTE
+                            with c_ps1: st.markdown(html_vista_superior(fila, MAPA, m['Unidades_Ultimo']), unsafe_allow_html=True)
+                            with c_ps2: st.markdown(html_vista_lateral(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Ultimo']), unsafe_allow_html=True)
                             with c_ps3:
                                 if mostrar_3d_sku: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Ultimo']), use_container_width=True, key=f"ps_{sku}")
                     st.divider()
 
         with tab_descargar:
+            st.write("Genera un Excel con 3 hojas (Comparativo, Original, Optimizada) con TODOS los cálculos de los SKUs.")
             excel_data = generar_excel_descarga(st.session_state.df_original, df_resultados, MAPA)
             st.download_button("📊 Descargar Reporte Excel", data=excel_data, file_name="Reporte_Optimizacion.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
             
@@ -503,10 +506,12 @@ def mostrar_layout():
         st.error("⚠️ Para usar el Layout, primero debes cargar el Excel en el módulo 'Cubicadora WMS'.")
         return
 
+    # Preparar df_layout (Demanda)
     df_orig = st.session_state.df_original.copy()
     df_res = st.session_state.df_resultados.copy()
     MAPA = st.session_state.mapa_columnas
 
+    # Demandas
     df_layout_orig = pd.DataFrame()
     df_layout_orig['SKU'] = df_orig[MAPA['sku']]
     stock_op = pd.to_numeric(df_orig[MAPA['stock']], errors='coerce').fillna(0)
@@ -525,6 +530,7 @@ def mostrar_layout():
 
     dict_demanda = {'Data Original': df_layout_orig, 'Data Optimizada': df_layout_opt}
 
+    # PANEL MASTER UI
     with st.expander("⚙️ PANEL MASTER CD (Configuración de Bodega)", expanded=True):
         col_inf, col_dr, col_op, col_an = st.columns(4)
         
@@ -583,6 +589,7 @@ def mostrar_layout():
                         st.success(f"🧠 IA Aplicada: {mejor['fuente']}, {'Vertical' if mejor['is_vertical'] else 'Horizontal'}, {mejor['pal_v']} por viga. Capacidad proyectada: {mejor['capacidad']:,}")
                         st.rerun()
 
+    # RESULTADOS LAYOUT
     if st.session_state.layout_generado:
         st.markdown("---")
         raw = st.session_state.filtro_sublayout.strip()
@@ -595,10 +602,12 @@ def mostrar_layout():
         is_vert = ('Vertical' in st.session_state.orientacion_rack) if 'Automática' not in st.session_state.orientacion_rack else (st.session_state.tipo_flujo in ['Flujo en U', 'Flujo en I (Línea Recta)'])
         res = motor_calculo_layout(df_activa, is_vert, st.session_state.pallets_viga, st.session_state)
 
+        # KPI
         dif = res['diferencia']
         if dif >= 0: st.success(f"✔️ ¡ÉXITO! Caben todos y sobran {dif:,} posiciones. (Capacidad: {res['capacidad']:,} | Demanda: {res['demanda']:,})")
         else: st.error(f"⚠️ ¡ALERTA! Faltan {abs(dif):,} posiciones. (Capacidad: {res['capacidad']:,} | Demanda: {res['demanda']:,})")
 
+        # PLOTLY 2D
         l_m, a_m = st.session_state.l_bod, st.session_state.a_bod
         fig_2d = go.Figure()
         fig_2d.add_shape(type="rect", x0=0, y0=0, x1=l_m, y1=a_m, line=dict(color="#2c3e50", width=4), fillcolor="#fafafa")
@@ -626,6 +635,8 @@ def mostrar_layout():
 
         fig_2d.update_layout(title="Plano CAD 2D del Centro de Distribución", xaxis=dict(range=[-2, l_m+2]), yaxis=dict(range=[-2, a_m+2], scaleanchor="x", scaleratio=1), height=600, margin=dict(l=0, r=0, t=40, b=0))
         st.plotly_chart(fig_2d, use_container_width=True)
+
+        st.info("Nota: El renderizado del Gemelo Digital 3D a escala de bodega completa ha sido optimizado y estará disponible en la próxima actualización del motor WebGL.")
 
 # ============================================================
 # 6. MENÚ DE NAVEGACIÓN PRINCIPAL (SIDEBAR)
