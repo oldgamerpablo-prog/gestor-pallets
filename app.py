@@ -181,12 +181,9 @@ def generar_excel_descarga(df_original, df_resultados, mapa):
 # ============================================================
 # FUNCIONES DE RENDERIZADO VISUAL
 # ============================================================
-
-# === ESTA ES LA FUNCIÓN QUE FALTABA! ===
 def es_formato_circular(formato):
     if pd.isna(formato): return False
     return any(k in norm_txt(formato) for k in ["tambor", "balde", "bidon", "cunete", "barril", "tarro", "lata"])
-# ========================================
 
 def get_material_css(formato):
     n = norm_txt(formato)
@@ -335,6 +332,7 @@ if archivo_subido is not None:
 
         if st.session_state.skus_activos:
             st.markdown(f"**Mostrando planos para {len(st.session_state.skus_activos)} SKUs:**")
+            
             for sku in st.session_state.skus_activos:
                 filtro = df_resultados[df_resultados[MAPA["sku"]].astype(str).str.upper() == str(sku).upper()]
                 if not filtro.empty:
@@ -360,7 +358,9 @@ if archivo_subido is not None:
                         with c_pb1: components.html(css_styles + html_vista_superior(fila, MAPA), height=300)
                         with c_pb2: components.html(css_styles + html_vista_lateral(fila, MAPA, m['Capacidad_Usada']), height=300)
                         with c_pb3:
-                            if st.session_state.mostrar_3d: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, cap_usada=m['Capacidad_Usada']), use_container_width=True)
+                            if st.session_state.mostrar_3d: 
+                                # ¡AQUÍ ESTÁ LA MAGIA! Se agrega key=f"plot_base_{sku}"
+                                st.plotly_chart(renderizar_3d_plotly(fila, MAPA, cap_usada=m['Capacidad_Usada']), use_container_width=True, key=f"plot_base_{sku}")
                             else: st.warning("Motor 3D apagado (más rápido)")
 
                         st.markdown("---")
@@ -369,7 +369,9 @@ if archivo_subido is not None:
                         with c_ps1: components.html(css_styles + html_vista_superior(fila, MAPA, cantidad_unidades=m['Unidades_Ultimo']), height=300)
                         with c_ps2: components.html(css_styles + html_vista_lateral(fila, MAPA, m['Capacidad_Usada'], total_unidades=m['Unidades_Ultimo']), height=300)
                         with c_ps3:
-                            if st.session_state.mostrar_3d: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada'], total_unidades=m['Unidades_Ultimo']), use_container_width=True)
+                            if st.session_state.mostrar_3d: 
+                                # ¡Y AQUÍ TAMBIÉN! Se agrega key=f"plot_sob_{sku}"
+                                st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada'], total_unidades=m['Unidades_Ultimo']), use_container_width=True, key=f"plot_sob_{sku}")
                             else: st.warning("Motor 3D apagado (más rápido)")
                 else:
                     st.error(f"❌ SKU '{sku}' no encontrado.")
