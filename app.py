@@ -16,7 +16,6 @@ st.set_page_config(page_title="WMS Analytics: Paletizado", layout="wide", page_i
 MAX_PESO_PALLET = 1200
 PESO_MADERA_PALLET = 25
 
-# Variables de memoria para que la app no "olvide" lo que estás viendo
 if "skus_activos" not in st.session_state:
     st.session_state.skus_activos = []
 if "mostrar_3d" not in st.session_state:
@@ -182,6 +181,13 @@ def generar_excel_descarga(df_original, df_resultados, mapa):
 # ============================================================
 # FUNCIONES DE RENDERIZADO VISUAL
 # ============================================================
+
+# === ESTA ES LA FUNCIÓN QUE FALTABA! ===
+def es_formato_circular(formato):
+    if pd.isna(formato): return False
+    return any(k in norm_txt(formato) for k in ["tambor", "balde", "bidon", "cunete", "barril", "tarro", "lata"])
+# ========================================
+
 def get_material_css(formato):
     n = norm_txt(formato)
     if any(k in n for k in ["tambor", "balde", "bidon", "lata"]): return {"bg_top": "radial-gradient(circle at 35% 35%, #93c5fd, #1d4ed8)", "bg_side": "linear-gradient(to right, #1e3a8a, #60a5fa 30%, #3b82f6 60%, #1e3a8a)", "border": "#1e3a8a", "radius": "50%", "shadow": "inset -3px -3px 6px rgba(0,0,0,0.4), 2px 3px 5px rgba(0,0,0,0.25)"}
@@ -301,8 +307,6 @@ if archivo_subido is not None:
     # --- PESTAÑA 1: VISUALIZADOR ---
     with tab_buscar:
         st.subheader("Buscador de SKUs")
-        
-        # Extraer todos los SKUs disponibles para el menú desplegable
         lista_skus_disponibles = df_resultados[MAPA["sku"]].astype(str).unique().tolist()
         
         opcion_seleccion = st.radio(
@@ -314,7 +318,6 @@ if archivo_subido is not None:
         skus_a_procesar = []
 
         if opcion_seleccion == "Elegir de la lista (Recomendado)":
-            # LA MAGIA: Un menú desplegable múltiple donde solo haces clic, sin teclear nada.
             skus_a_procesar = st.multiselect(
                 "Selecciona uno o varios SKUs de la lista:", 
                 options=lista_skus_disponibles,
@@ -330,19 +333,14 @@ if archivo_subido is not None:
         if st.button("🚀 Generar Planos", type="primary"):
             st.session_state.skus_activos = skus_a_procesar
 
-        # DIBUJAR LOS SKUS ALMACENADOS EN MEMORIA
         if st.session_state.skus_activos:
             st.markdown(f"**Mostrando planos para {len(st.session_state.skus_activos)} SKUs:**")
-            
             for sku in st.session_state.skus_activos:
                 filtro = df_resultados[df_resultados[MAPA["sku"]].astype(str).str.upper() == str(sku).upper()]
-                
                 if not filtro.empty:
                     fila = filtro.iloc[0]
                     m = calcular_metricas_dinamicas(fila, MAPA, modo)
-                    
                     st.info(f"**SKU:** {sku} | **Estado:** {m['Estado']} | **Formato:** {fila[MAPA['formato']]}")
-                    
                     col_izq, col_der = st.columns([1, 3])
                     with col_izq:
                         st.markdown("### 📋 Datos Base")
