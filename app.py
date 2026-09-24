@@ -251,24 +251,49 @@ def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
     target_units = int(cap_usada) if total_unidades is None else int(total_unidades)
     layout = mejor_distribucion_filas(largo, ancho, lp, ap)
     if layout["cantidad"] <= 0 or target_units <= 0: return go.Figure()
+    
     traces = []
+    # Dibujar pallet
     h_deck, h_leg, w_leg = min(3.0, hp * 0.2), hp - min(3.0, hp * 0.2), min(10.0, lp * 0.1)
     traces.extend([get_box_cm(0, 0, h_leg, lp, ap, h_deck, '#c18c5d'), get_box_cm(0, 0, 0, w_leg, ap, h_leg, '#966336'), get_box_cm((lp - w_leg)/2, 0, 0, w_leg, ap, h_leg, '#966336'), get_box_cm(lp - w_leg, 0, 0, w_leg, ap, h_leg, '#966336')])
+    
     es_cilindro = es_formato_circular(valor_col(fila, "formato", mapa))
     color_carga = '#2563eb' if es_cilindro else '#d4a373'
+    
     units_placed, nivel = 0, 0
     while units_placed < target_units:
         z_base = hp + (nivel * alto)
         for c in layout["cajas"]:
             if units_placed >= target_units: break
+            
             if es_cilindro:
                 radio = min(c['largo'], c['ancho']) / 2
-                traces.append(crear_cilindro_solido_cm(c['x'] + c['largo']/2, c['y'] + c['ancho']/2, z_base, radio - 0.2, alto - 0.2, color_carga))
+                cx, cy = c['x'] + c['largo']/2, c['y'] + c['ancho']/2
+                # Cilindro con pequeño gap vertical (alto - 0.5) para que no se peguen
+                traces.append(crear_cilindro_solido_cm(cx, cy, z_base, radio - 0.2, alto - 0.5, color_carga))
+                # Aro superior (la "tapa") para separarlos visualmente
+                theta = np.linspace(0, 2*np.pi, 24)
+                traces.append(go.Scatter3d(
+                    x=cx + (radio - 0.2) * np.cos(theta), y=cy + (radio - 0.2) * np.sin(theta), z=np.full(24, z_base + alto - 0.5),
+                    mode='lines', line=dict(color='#1e3a8a', width=3), showlegend=False, hoverinfo='none'
+                ))
             else:
                 gap = 0.5
-                traces.append(get_box_cm(c['x'] + gap/2, c['y'] + gap/2, z_base, c['largo'] - gap, c['ancho'] - gap, alto - gap/2, color_carga))
+                x_c, y_c = c['x'] + gap/2, c['y'] + gap/2
+                l_c, a_c = c['largo'] - gap, c['ancho'] - gap
+                alt_c = alto - gap/2
+                # Caja
+                traces.append(get_box_cm(x_c, y_c, z_base, l_c, a_c, alt_c, color_carga))
+                # Bordes oscuros para la caja
+                x_e = [x_c, x_c+l_c, x_c+l_c, x_c, x_c, None, x_c, x_c+l_c, x_c+l_c, x_c, x_c, None, x_c, x_c, None, x_c+l_c, x_c+l_c, None, x_c+l_c, x_c+l_c, None, x_c, x_c]
+                y_e = [y_c, y_c, y_c+a_c, y_c+a_c, y_c, None, y_c, y_c, y_c+a_c, y_c+a_c, y_c, None, y_c, y_c, None, y_c, y_c, None, y_c+a_c, y_c+a_c, None, y_c+a_c, y_c+a_c]
+                z_e = [z_base, z_base, z_base, z_base, z_base, None, z_base+alt_c, z_base+alt_c, z_base+alt_c, z_base+alt_c, z_base+alt_c, None, z_base, z_base+alt_c, None, z_base, z_base+alt_c, None, z_base, z_base+alt_c, None, z_base, z_base+alt_c]
+                traces.append(go.Scatter3d(
+                    x=x_e, y=y_e, z=z_e, mode='lines', line=dict(color='#8b5a2b', width=2), showlegend=False, hoverinfo='none'
+                ))
             units_placed += 1
         nivel += 1
+        
     fig = go.Figure(data=traces)
     fig.update_layout(scene=dict(xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False), aspectmode='data', camera=dict(eye=dict(x=1.6, y=1.6, z=1.0))), margin=dict(r=0, l=0, b=0, t=0), height=300)
     return fig
