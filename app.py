@@ -18,8 +18,6 @@ PESO_MADERA_PALLET = 25
 
 if "skus_activos" not in st.session_state:
     st.session_state.skus_activos = []
-if "mostrar_3d" not in st.session_state:
-    st.session_state.mostrar_3d = False
 
 css_styles = """
 <style>
@@ -325,8 +323,6 @@ if archivo_subido is not None:
         else:
             skus_a_procesar = lista_skus_disponibles
 
-        st.session_state.mostrar_3d = st.toggle("🧊 Activar Motor 3D (Desactívalo si vas a ver TODOS los SKUs para mayor velocidad)", value=st.session_state.mostrar_3d)
-
         if st.button("🚀 Generar Planos", type="primary"):
             st.session_state.skus_activos = skus_a_procesar
 
@@ -339,7 +335,9 @@ if archivo_subido is not None:
                     fila = filtro.iloc[0]
                     m = calcular_metricas_dinamicas(fila, MAPA, modo)
                     st.info(f"**SKU:** {sku} | **Estado:** {m['Estado']} | **Formato:** {fila[MAPA['formato']]}")
+                    
                     col_izq, col_der = st.columns([1, 3])
+                    
                     with col_izq:
                         st.markdown("### 📋 Datos Base")
                         st.write(f"**Largo:** {fmt(a_float(valor_col(fila, 'largo', MAPA)))} cm")
@@ -351,6 +349,10 @@ if archivo_subido is not None:
                         st.write(f"**Unids Pallet:** {fmt(m['Capacidad_Usada'], 0)} u")
                         st.write(f"**Pallets Requeridos:** {m['Pallets']}")
                         st.write(f"**Últ. Pallet:** {m['Ocupacion_Ultimo']:.1f}%")
+                        
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        # BOTÓN INDIVIDUAL POR CADA SKU
+                        mostrar_3d_sku = st.toggle(f"🧊 Activar Motor 3D", key=f"toggle_3d_{sku}")
 
                     with col_der:
                         st.markdown(f"#### 📦 PALLET BASE ({m['Capacidad_Usada']} UNIDADES)")
@@ -358,10 +360,9 @@ if archivo_subido is not None:
                         with c_pb1: components.html(css_styles + html_vista_superior(fila, MAPA), height=300)
                         with c_pb2: components.html(css_styles + html_vista_lateral(fila, MAPA, m['Capacidad_Usada']), height=300)
                         with c_pb3:
-                            if st.session_state.mostrar_3d: 
-                                # ¡AQUÍ ESTÁ LA MAGIA! Se agrega key=f"plot_base_{sku}"
+                            if mostrar_3d_sku: 
                                 st.plotly_chart(renderizar_3d_plotly(fila, MAPA, cap_usada=m['Capacidad_Usada']), use_container_width=True, key=f"plot_base_{sku}")
-                            else: st.warning("Motor 3D apagado (más rápido)")
+                            else: st.warning("Motor 3D apagado (usa el interruptor)")
 
                         st.markdown("---")
                         st.markdown(f"#### 🧩 ÚLTIMO PALLET ({m['Unidades_Ultimo']} UNIDADES | {m['Ocupacion_Ultimo']:.1f}%)")
@@ -369,10 +370,9 @@ if archivo_subido is not None:
                         with c_ps1: components.html(css_styles + html_vista_superior(fila, MAPA, cantidad_unidades=m['Unidades_Ultimo']), height=300)
                         with c_ps2: components.html(css_styles + html_vista_lateral(fila, MAPA, m['Capacidad_Usada'], total_unidades=m['Unidades_Ultimo']), height=300)
                         with c_ps3:
-                            if st.session_state.mostrar_3d: 
-                                # ¡Y AQUÍ TAMBIÉN! Se agrega key=f"plot_sob_{sku}"
+                            if mostrar_3d_sku: 
                                 st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada'], total_unidades=m['Unidades_Ultimo']), use_container_width=True, key=f"plot_sob_{sku}")
-                            else: st.warning("Motor 3D apagado (más rápido)")
+                            else: st.warning("Motor 3D apagado (usa el interruptor)")
                 else:
                     st.error(f"❌ SKU '{sku}' no encontrado.")
                 st.divider()
