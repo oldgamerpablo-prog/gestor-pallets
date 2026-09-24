@@ -27,7 +27,7 @@ if "df_original" not in st.session_state: st.session_state.df_original = None
 if "df_resultados" not in st.session_state: st.session_state.df_resultados = None
 if "mapa_columnas" not in st.session_state: st.session_state.mapa_columnas = None
 
-# Memoria Layout
+# Memoria Layout & Datos de Ocupación
 parametros_layout = {
     'l_bod': 40.0, 'a_bod': 50.0, 'alt_bod': 7.0, 'cant_pilares_x': 4, 'cant_pilares_y': 1,
     'dist_pilares_x': 20.0, 'dist_pilares_y': 15.0, 'ofi_pos_x': 0.0, 'ofi_pos_y': 0.0,
@@ -41,6 +41,8 @@ for k, v in parametros_layout.items():
 
 if "layout_generado" not in st.session_state: st.session_state.layout_generado = False
 if "mostrar_3d_layout" not in st.session_state: st.session_state.mostrar_3d_layout = False
+if "kpi_layout_capacidad" not in st.session_state: st.session_state.kpi_layout_capacidad = 0
+if "kpi_layout_ubicados" not in st.session_state: st.session_state.kpi_layout_ubicados = 0
 
 css_styles = """
 <style>
@@ -74,7 +76,7 @@ color_styles = """
     .color-card:hover { box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12); transform: translateY(-4px); }
     .card-icon-header { display: flex; align-items: center; justify-content: space-between; }
     .card-icon { font-size: 2rem; }
-    .card-tag-color { font-size: 0.72rem; font-weight: 800; padding: 4px 10px; border-radius: 20px; letter-spacing: 0.5px; }
+    .card-tag-color { font-size: 0.72rem; font-weight: 800; padding: 4px 12px; border-radius: 20px; letter-spacing: 0.5px; }
     .tag-blue { background: #dbeafe; color: #1e40af; }
     .tag-green { background: #d1fae5; color: #065f46; }
     .tag-purple { background: #ede9fe; color: #5b21b6; }
@@ -413,6 +415,10 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     demanda_total = int(df_activa['Cantidad_Pallets'].sum())
     pallets_ubicados_totales = sum(r['Ubicadas'] for r in resumen_ubicacion)
 
+    # Actualizar KPIs en sesión para Analytics
+    st.session_state.kpi_layout_capacidad = total_posiciones
+    st.session_state.kpi_layout_ubicados = pallets_ubicados_totales
+
     return {
         'modulos': modulos_validos, 'niveles': niveles_operativos,
         'capacidad': total_posiciones, 'demanda': demanda_total,
@@ -515,7 +521,6 @@ def cambiar_menu(pagina):
 def mostrar_portada():
     st.markdown(color_styles, unsafe_allow_html=True)
     
-    # HERO BANNER
     st.markdown("""
     <div class="hero-container-color">
         <div class="hero-title-color">WMS Analytics Hub</div>
@@ -525,7 +530,6 @@ def mostrar_portada():
 
     st.markdown("<h3 style='color:#0f172a; font-weight:800; margin-bottom: 20px;'>MÓDULOS DE CONTROL</h3>", unsafe_allow_html=True)
     
-    # FILA 1 (3 Módulos)
     col1, col2, col3 = st.columns(3)
     
     with col1:
@@ -569,14 +573,13 @@ def mostrar_portada():
                     <span class="card-tag-color tag-purple">DISPONIBLE</span>
                 </div>
                 <div class="color-card-title">Analytics & Reportería</div>
-                <p class="color-card-desc">Dashboard de indicadores clave (KPIs), volumetría total, ocupación y análisis gerencial.</p>
+                <p class="color-card-desc">Dashboard de indicadores clave (KPIs), volumetría total, ocupación física de bodega y análisis gerencial.</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
         st.button("📊 Abrir Dashboard Analytics", key="btn_an", type="primary", use_container_width=True, on_click=cambiar_menu, args=("📊 Analytics & Reportería",))
         st.markdown("<br>", unsafe_allow_html=True)
 
-    # FILA 2 (2 Módulos en desarrollo)
     col4, col5 = st.columns(2)
 
     with col4:
@@ -817,6 +820,9 @@ def mostrar_layout():
                 fig_3d = generar_layout_3d(res, l_m, a_m, st.session_state.alt_bod, is_vert, skus_buscados, puertas)
                 st.plotly_chart(fig_3d, use_container_width=True)
 
+# ============================================================
+# MÓDULO: ANALYTICS & REPORTERÍA
+# ============================================================
 def mostrar_analytics():
     st.title("📊 Analytics & Reportería Ejecutivo")
     
@@ -835,8 +841,6 @@ def mostrar_analytics():
 
     df_res['Pallets_Req_Excel'] = [m['Pallets'] for m in metrics_excel]
     df_res['Pallets_Req_Optimo'] = [m['Pallets'] for m in metrics_opt]
-    df_res['Cap_Excel_Used'] = [m['Capacidad_Usada'] for m in metrics_excel]
-    df_res['Cap_Opt_Used'] = [m['Capacidad_Usada'] for m in metrics_opt]
     df_res['Ocupacion_Ult_Pct'] = [m['Ocupacion_Ultimo'] for m in metrics_excel]
     df_res['Estado_Sku'] = [m['Estado'] for m in metrics_excel]
 
@@ -853,18 +857,24 @@ def mostrar_analytics():
     vol_total_bodega = df_res['Volumen_Total_M3'].sum()
     num_alertas = sum(1 for m in metrics_excel if "❌" in m["Estado"] or "⚠️" in m["Estado"] or "🚨" in m["Estado"])
 
+    # KPI Layout Ocupación de Bodega
+    cap_bodega_slots = st.session_state.kpi_layout_capacidad
+    pallets_ubicados = st.session_state.kpi_layout_ubicados
+    pct_ocupacion_bodega = (pallets_ubicados / cap_bodega_slots * 100) if cap_bodega_slots > 0 else 0.0
+
     st.markdown("### 📈 Indicadores Macro de Almacenamiento")
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("📦 Volumen Total Carga", f"{vol_total_bodega:,.1f} m³")
-    m2.metric("🏗️ Pallets Requeridos (Excel)", f"{tot_pallets_excel:,} pal")
-    m3.metric("🎯 Pallets Requeridos (Óptimo)", f"{tot_pallets_opt:,} pal", delta=f"{-ahorro_pallets:,} pal ({pct_ahorro:.1f}%)", delta_color="inverse")
-    m4.metric("🚨 SKUs con Alertas", f"{num_alertas} SKUs", delta="Atención Requerida" if num_alertas > 0 else "Todo OK", delta_color="off")
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("📦 Volumen Carga", f"{vol_total_bodega:,.1f} m³")
+    m2.metric("🏗️ Pallets Excel", f"{tot_pallets_excel:,} pal")
+    m3.metric("🎯 Pallets Óptimo", f"{tot_pallets_opt:,} pal", delta=f"{-ahorro_pallets:,} pal ({pct_ahorro:.1f}%)", delta_color="inverse")
+    m4.metric("🏛️ Ocupación Bodega", f"{pct_ocupacion_bodega:.1f}%" if cap_bodega_slots > 0 else "N/D", delta=f"{pallets_ubicados:,}/{cap_bodega_slots:,} Slots" if cap_bodega_slots > 0 else "Generar Layout primero")
+    m5.metric("🚨 SKUs Alertas", f"{num_alertas} SKUs", delta="Atención Requerida" if num_alertas > 0 else "Todo OK", delta_color="off")
 
     st.markdown("---")
 
     g1, g2 = st.columns(2)
     with g1:
-        st.markdown("#### 🍩 Distribución de SKUs por Formato de Envase")
+        st.markdown("#### 🍩 Distribución de SKUs por Formato")
         df_formato = df_res[MAPA['formato']].value_counts().reset_index()
         df_formato.columns = ['Formato', 'Cantidad']
         fig_donut = px.pie(df_formato, values='Cantidad', names='Formato', hole=0.4, color_discrete_sequence=px.colors.qualitative.Bold)
@@ -872,7 +882,7 @@ def mostrar_analytics():
         st.plotly_chart(fig_donut, use_container_width=True)
 
     with g2:
-        st.markdown("#### 📊 Top 10 SKUs con Mayor Requerimiento de Pallets")
+        st.markdown("#### 📊 Top 10 SKUs por Pallets Requeridos")
         df_top10 = df_res.sort_values(by='Pallets_Req_Excel', ascending=False).head(10)
         fig_top = px.bar(df_top10, x='Pallets_Req_Excel', y=MAPA['sku'], orientation='h', text='Pallets_Req_Excel', color='Pallets_Req_Excel', color_continuous_scale='Blues')
         fig_top.update_layout(yaxis=dict(autorange="reversed"), margin=dict(l=20, r=20, t=30, b=20), height=350, showlegend=False)
@@ -882,7 +892,7 @@ def mostrar_analytics():
 
     g3, g4 = st.columns(2)
     with g3:
-        st.markdown("#### 📉 Comparativa de Pallets: Excel vs. Óptimo (Top 15 SKUs)")
+        st.markdown("#### 📉 Comparativa de Pallets: Excel vs. Óptimo (Top 15)")
         df_comp = df_res.head(15)
         fig_comp = go.Figure()
         fig_comp.add_trace(go.Bar(x=df_comp[MAPA['sku']], y=df_comp['Pallets_Req_Excel'], name='Excel (Manual)', marker_color='#3b82f6'))
@@ -891,7 +901,7 @@ def mostrar_analytics():
         st.plotly_chart(fig_comp, use_container_width=True)
 
     with g4:
-        st.markdown("#### ⚖️ Matriz Peso por Pallet vs. % Ocupación Último Pallet")
+        st.markdown("#### ⚖️ Matriz Peso por Pallet vs. Ocupación")
         df_res['Peso_Pallet_Kg'] = [m['Peso_Pallet'] for m in metrics_excel]
         fig_scatter = px.scatter(
             df_res, x='Ocupacion_Ult_Pct', y='Peso_Pallet_Kg', size='Stock_Num', color='Estado_Sku',
@@ -902,19 +912,11 @@ def mostrar_analytics():
         fig_scatter.update_layout(margin=dict(l=20, r=20, t=30, b=20), height=350)
         st.plotly_chart(fig_scatter, use_container_width=True)
 
-def mostrar_inbound():
-    st.title("📥 Entrada de Mercadería (Inbound)")
-    st.info("Módulo táctico para la gestión inteligente de andenes, asignación de recepción y priorización de descarga.")
-
-def mostrar_outbound():
-    st.title("📤 Salida de Mercadería (Outbound)")
-    st.info("Planificación de despacho, consolidación de pedidos por ruta y cubicaje avanzado de camiones de carga.")
-
 # ============================================================
 # 6. MENÚ DE NAVEGACIÓN PRINCIPAL (SIDEBAR)
 # ============================================================
 
-menu_opciones = ["🏠 Portada Principal", "📦 Cubicadora WMS", "🏗️ Layout de Bodega", "📊 Analytics & Reportería", "📥 Entrada Mercadería", "📤 Salida Mercadería"]
+menu_opciones = ["🏠 Portada Principal", "📦 Cubicadora WMS", "🏗️ Layout de Bodega", "📊 Analytics & Reportería"]
 st.session_state.menu_seleccion = st.sidebar.radio(
     "Navegación", 
     menu_opciones,
@@ -922,11 +924,9 @@ st.session_state.menu_seleccion = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v5.1 • Complete Executive Suite")
+st.sidebar.caption("WMS Analytics Hub v5.1 • Executive Suite")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
 elif st.session_state.menu_seleccion == "🏗️ Layout de Bodega": mostrar_layout()
 elif st.session_state.menu_seleccion == "📊 Analytics & Reportería": mostrar_analytics()
-elif st.session_state.menu_seleccion == "📥 Entrada Mercadería": mostrar_inbound()
-elif st.session_state.menu_seleccion == "📤 Salida Mercadería": mostrar_outbound()
