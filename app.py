@@ -52,6 +52,84 @@ css_styles = """
 </style>
 """
 
+# Estilos cibernéticos para la portada
+tech_styles = """
+<style>
+    .hero-container {
+        background: linear-gradient(135deg, #020617 0%, #0f172a 50%, #1e1b4b 100%);
+        border: 1px solid #38bdf8;
+        border-radius: 16px;
+        padding: 50px 30px;
+        text-align: center;
+        box-shadow: 0 0 30px rgba(56, 189, 248, 0.25);
+        margin-bottom: 35px;
+    }
+    .hero-title {
+        font-size: 3.8rem;
+        font-weight: 900;
+        background: linear-gradient(90deg, #ffffff, #38bdf8, #818cf8);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        letter-spacing: -1px;
+        margin-bottom: 10px;
+    }
+    .hero-subtitle {
+        color: #94a3b8;
+        font-size: 1.25rem;
+        font-weight: 400;
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    .tech-card {
+        background: radial-gradient(circle at top left, #1e293b, #0f172a);
+        border: 1px solid #334155;
+        border-radius: 14px;
+        padding: 28px;
+        height: 240px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        transition: all 0.3s ease;
+        margin-bottom: 15px;
+    }
+    .tech-card:hover {
+        border-color: #38bdf8;
+        box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+        transform: translateY(-4px);
+    }
+    .card-icon-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .card-icon {
+        font-size: 2.2rem;
+    }
+    .card-tag {
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 20px;
+        letter-spacing: 1px;
+    }
+    .tag-active { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid #38bdf8; }
+    .tag-soon { background: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid #64748b; }
+    .tech-card-title {
+        color: #f8fafc;
+        font-size: 1.35rem;
+        font-weight: 800;
+        margin: 12px 0 6px 0;
+    }
+    .tech-card-desc {
+        color: #94a3b8;
+        font-size: 0.92rem;
+        line-height: 1.45;
+        margin: 0;
+    }
+</style>
+"""
+
 # ============================================================
 # 2. FUNCIONES CORE (Cubicadora)
 # ============================================================
@@ -481,101 +559,84 @@ def cambiar_menu(pagina):
     st.session_state.menu_seleccion = pagina
 
 def mostrar_portada():
-    # Estilos avanzados para tarjetas
+    st.markdown(tech_styles, unsafe_allow_html=True)
+    
+    # HERO BANNER ULTRA TECH
     st.markdown("""
-    <style>
-        .hero-box {
-            position: relative; width: 100%; height: 350px; border-radius: 12px; overflow: hidden; margin-bottom: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-        }
-        .hero-img {
-            width: 100%; height: 100%; object-fit: cover; filter: brightness(0.4) contrast(1.1);
-        }
-        .hero-text {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; width: 90%;
-        }
-        .card-custom {
-            background: white; border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0; height: 100%; display: flex; flex-direction: column;
-        }
-        .card-img {
-            width: 100%; height: 180px; object-fit: cover; border-bottom: 3px solid #1e3a8a;
-        }
-        .card-body {
-            padding: 20px; flex-grow: 1;
-        }
-        .card-title {
-            color: #0f172a; font-weight: 800; font-size: 1.4rem; margin-top: 0; margin-bottom: 10px;
-        }
-        .card-desc {
-            color: #475569; font-size: 0.95rem; line-height: 1.5;
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
-    # HERO BANNER CINEMATOGRÁFICO
-    st.markdown("""
-    <div class="hero-box">
-        <img src="https://images.pexels.com/photos/2449454/pexels-photo-2449454.jpeg?auto=compress&cs=tinysrgb&w=1600" class="hero-img">
-        <div class="hero-text">
-            <h1 style="font-size: 4.5rem; font-weight: 900; color: white; margin: 0; letter-spacing: 2px;">THE FUTURE OF <span style="color: #f39c12;">LOGISTICS</span></h1>
-            <p style="font-size: 1.3rem; color: #e2e8f0; margin-top: 10px; font-weight: 300;">WMS Analytics Hub • Advanced Engineering & Layout Optimization</p>
-        </div>
+    <div class="hero-container">
+        <div class="hero-title">THE FUTURE OF LOGISTICS</div>
+        <p class="hero-subtitle">WMS Analytics Hub • Next-Generation Warehouse Intelligence & Spatial Optimization</p>
     </div>
     """, unsafe_allow_html=True)
 
-    # MATRIZ DE MÓDULOS
-    c1, c2 = st.columns(2)
+    # MATRIZ 2X2 DE TARJETAS TECNOLÓGICAS
+    st.markdown("<h3 style='color:#f8fafc; font-weight:800; margin-bottom: 20px;'>MÓDULOS DE CONTROL</h3>", unsafe_allow_html=True)
     
-    with c1:
+    col1, col2 = st.columns(2)
+    
+    with col1:
         st.markdown("""
-        <div class="card-custom" style="margin-bottom: 10px;">
-            <img src="https://images.pexels.com/photos/4481258/pexels-photo-4481258.jpeg?auto=compress&cs=tinysrgb&w=800" class="card-img">
-            <div class="card-body">
-                <h3 class="card-title">📦 Cubicadora de Pallets</h3>
-                <p class="card-desc">Herramienta algorítmica para la optimización geométrica de la estiba. Calcula capacidades máximas y genera renders 3D para la operación.</p>
+        <div class="tech-card">
+            <div>
+                <div class="card-icon-header">
+                    <span class="card-icon">📦</span>
+                    <span class="card-tag tag-active">OPERATIVO</span>
+                </div>
+                <div class="tech-card-title">Cubicadora de Pallets</div>
+                <p class="tech-card-desc">Cálculo algorítmico de volumen, estiba optimizada de cajas/baldes y previsualización gráfica 2D/3D en tiempo real.</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        st.button("Acceder a Cubicadora", key="btn_cub", use_container_width=True, on_click=cambiar_menu, args=("📦 Cubicadora WMS",))
+        st.button("⚙️ Abrir Cubicadora", key="btn_cub", type="primary", use_container_width=True, on_click=cambiar_menu, args=("📦 Cubicadora WMS",))
         st.markdown("<br>", unsafe_allow_html=True)
 
-    with c2:
+    with col2:
         st.markdown("""
-        <div class="card-custom" style="margin-bottom: 10px;">
-            <img src="https://images.pexels.com/photos/11081023/pexels-photo-11081023.jpeg?auto=compress&cs=tinysrgb&w=800" class="card-img" style="border-bottom-color: #27ae60;">
-            <div class="card-body">
-                <h3 class="card-title">🏗️ Layout de Bodega</h3>
-                <p class="card-desc">Simulador espacial para el diseño de centros de distribución. Valida configuraciones de racks contra demanda real mediante Inteligencia Artificial.</p>
+        <div class="tech-card">
+            <div>
+                <div class="card-icon-header">
+                    <span class="card-icon">🏗️</span>
+                    <span class="card-tag tag-active">OPERATIVO</span>
+                </div>
+                <div class="tech-card-title">Layout de Bodega</div>
+                <p class="tech-card-desc">Diseñador espacial de Centro de Distribución, optimización de flujos de tránsito y Gemelo Digital 3D interactivo.</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        st.button("Acceder a Layout", key="btn_lay", use_container_width=True, on_click=cambiar_menu, args=("🏗️ Layout de Bodega",))
+        st.button("⚙️ Abrir Diseñador Layout", key="btn_lay", type="primary", use_container_width=True, on_click=cambiar_menu, args=("🏗️ Layout de Bodega",))
         st.markdown("<br>", unsafe_allow_html=True)
 
-    c3, c4 = st.columns(2)
+    col3, col4 = st.columns(2)
 
-    with c3:
+    with col3:
         st.markdown("""
-        <div class="card-custom" style="margin-bottom: 10px; opacity: 0.85;">
-            <img src="https://images.pexels.com/photos/220072/pexels-photo-220072.jpeg?auto=compress&cs=tinysrgb&w=800" class="card-img" style="border-bottom-color: #f39c12; filter: grayscale(50%);">
-            <div class="card-body">
-                <h3 class="card-title" style="color: #475569;">📥 Entrada de Mercadería (Inbound)</h3>
-                <p class="card-desc">Planificador táctico para la gestión de andenes, recepción de proveedores y cross-docking.</p>
+        <div class="tech-card" style="opacity: 0.7;">
+            <div>
+                <div class="card-icon-header">
+                    <span class="card-icon">📥</span>
+                    <span class="card-tag tag-soon">EN DESARROLLO</span>
+                </div>
+                <div class="tech-card-title">Entrada de Mercadería (Inbound)</div>
+                <p class="tech-card-desc">Módulo táctico para la gestión inteligente de andenes, asignación de recepción y priorización de descarga.</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        st.button("🔒 Próximamente", key="btn_in", disabled=True, use_container_width=True)
+        st.button("🔒 Módulo en Construcción", key="btn_in", disabled=True, use_container_width=True)
 
-    with c4:
+    with col4:
         st.markdown("""
-        <div class="card-custom" style="margin-bottom: 10px; opacity: 0.85;">
-            <img src="https://images.pexels.com/photos/2199293/pexels-photo-2199293.jpeg?auto=compress&cs=tinysrgb&w=800" class="card-img" style="border-bottom-color: #e74c3c; filter: grayscale(50%);">
-            <div class="card-body">
-                <h3 class="card-title" style="color: #475569;">📤 Salida de Mercadería (Outbound)</h3>
-                <p class="card-desc">Consolidador de pedidos, asignación de bahías de despacho y cubicaje avanzado de camiones.</p>
+        <div class="tech-card" style="opacity: 0.7;">
+            <div>
+                <div class="card-icon-header">
+                    <span class="card-icon">📤</span>
+                    <span class="card-tag tag-soon">EN DESARROLLO</span>
+                </div>
+                <div class="tech-card-title">Salida de Mercadería (Outbound)</div>
+                <p class="tech-card-desc">Planificación de despacho, consolidación de pedidos por ruta y cubicaje avanzado de camiones de carga.</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        st.button("🔒 Próximamente", key="btn_out", disabled=True, use_container_width=True)
+        st.button("🔒 Módulo en Construcción", key="btn_out", disabled=True, use_container_width=True)
 
 
 def mostrar_cubicadora():
@@ -797,7 +858,7 @@ st.session_state.menu_seleccion = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v4.0 • Enterprise Edition")
+st.sidebar.caption("WMS Analytics Hub v4.1 • Industrial Tech")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
