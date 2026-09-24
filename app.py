@@ -3,6 +3,7 @@ import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import plotly.express as px
 import math
 import re
 import unicodedata
@@ -52,86 +53,34 @@ css_styles = """
 </style>
 """
 
-# Estilos visuales refinados con color y equilibrio
 color_styles = """
 <style>
     .hero-container-color {
         background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #0369a1 100%);
-        border-radius: 16px;
-        padding: 50px 30px;
-        text-align: center;
-        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.25);
-        margin-bottom: 35px;
+        border-radius: 16px; padding: 50px 30px; text-align: center;
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.25); margin-bottom: 35px;
     }
-    .hero-title-color {
-        font-size: 3.6rem;
-        font-weight: 900;
-        color: #ffffff;
-        letter-spacing: -1px;
-        margin-bottom: 14px;
-        text-align: center;
-    }
-    .hero-subtitle-color {
-        color: #e2e8f0;
-        font-size: 1.25rem;
-        font-weight: 400;
-        max-width: 850px;
-        margin: 0 auto;
-        line-height: 1.6;
-        text-align: center;
-    }
+    .hero-title-color { font-size: 3.6rem; font-weight: 900; color: #ffffff; letter-spacing: -1px; margin-bottom: 14px; text-align: center; }
+    .hero-subtitle-color { color: #e2e8f0; font-size: 1.25rem; font-weight: 400; max-width: 850px; margin: 0 auto; line-height: 1.6; text-align: center; }
     .color-card {
-        background: #ffffff;
-        border-radius: 14px;
-        padding: 28px;
-        height: 230px;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
-        transition: all 0.3s ease;
-        margin-bottom: 15px;
-        border-top: 5px solid #2563eb;
+        background: #ffffff; border-radius: 14px; padding: 28px; height: 230px;
+        display: flex; flex-direction: column; justify-content: space-between;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05); transition: all 0.3s ease; margin-bottom: 15px; border-top: 5px solid #2563eb;
     }
     .color-card-green { border-top-color: #059669; }
+    .color-card-purple { border-top-color: #7c3aed; }
     .color-card-amber { border-top-color: #d97706; }
     .color-card-rose { border-top-color: #e11d48; }
-
-    .color-card:hover {
-        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
-        transform: translateY(-4px);
-    }
-    .card-icon-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .card-icon {
-        font-size: 2.2rem;
-    }
-    .card-tag-color {
-        font-size: 0.75rem;
-        font-weight: 800;
-        padding: 4px 12px;
-        border-radius: 20px;
-        letter-spacing: 0.5px;
-    }
+    .color-card:hover { box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12); transform: translateY(-4px); }
+    .card-icon-header { display: flex; align-items: center; justify-content: space-between; }
+    .card-icon { font-size: 2.2rem; }
+    .card-tag-color { font-size: 0.75rem; font-weight: 800; padding: 4px 12px; border-radius: 20px; letter-spacing: 0.5px; }
     .tag-blue { background: #dbeafe; color: #1e40af; }
     .tag-green { background: #d1fae5; color: #065f46; }
+    .tag-purple { background: #ede9fe; color: #5b21b6; }
     .tag-soon { background: #f1f5f9; color: #64748b; }
-
-    .color-card-title {
-        color: #0f172a;
-        font-size: 1.35rem;
-        font-weight: 800;
-        margin: 12px 0 6px 0;
-    }
-    .color-card-desc {
-        color: #475569;
-        font-size: 0.95rem;
-        line-height: 1.5;
-        margin: 0;
-    }
+    .color-card-title { color: #0f172a; font-size: 1.35rem; font-weight: 800; margin: 12px 0 6px 0; }
+    .color-card-desc { color: #475569; font-size: 0.95rem; line-height: 1.5; margin: 0; }
 </style>
 """
 
@@ -566,11 +515,11 @@ def cambiar_menu(pagina):
 def mostrar_portada():
     st.markdown(color_styles, unsafe_allow_html=True)
     
-    # HERO BANNER EQUILIBRADO Y CENTRADO
+    # HERO BANNER CENTRADO Y LIMPIO
     st.markdown("""
     <div class="hero-container-color">
         <div class="hero-title-color">WMS Analytics Hub</div>
-        <p class="hero-subtitle-color">Plataforma integral de ingeniería logística para la optimización de almacenamiento, cubicación geométrica y diseño avanzado de layout de bodegas.</p>
+        <div class="hero-subtitle-color">Plataforma integral de ingeniería logística para la optimización de almacenamiento, cubicación geométrica y diseño avanzado de layout de bodegas.</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -630,18 +579,18 @@ def mostrar_portada():
 
     with col4:
         st.markdown("""
-        <div class="color-card color-card-rose" style="opacity: 0.85;">
+        <div class="color-card color-card-purple" style="opacity: 0.85;">
             <div>
                 <div class="card-icon-header">
-                    <span class="card-icon">📤</span>
-                    <span class="card-tag-color tag-soon">EN DESARROLLO</span>
+                    <span class="card-icon">📊</span>
+                    <span class="card-tag-color tag-purple">NUEVO</span>
                 </div>
-                <div class="color-card-title">Salida de Mercadería (Outbound)</div>
-                <p class="color-card-desc">Planificación de despacho, consolidación de pedidos por ruta y cubicaje avanzado de camiones de carga.</p>
+                <div class="color-card-title">Analytics & Reportería Ejecutivo</div>
+                <p class="color-card-desc">Dashboard de indicadores clave (KPIs), volumetría total, matrices de ocupación y análisis gerencial.</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        st.button("🔒 Módulo en Construcción", key="btn_out", disabled=True, use_container_width=True)
+        st.button("📊 Abrir Dashboard Analytics", key="btn_an", type="primary", use_container_width=True, on_click=cambiar_menu, args=("📊 Analytics & Reportería",))
 
 
 def mostrar_cubicadora():
@@ -852,10 +801,107 @@ def mostrar_layout():
                 st.plotly_chart(fig_3d, use_container_width=True)
 
 # ============================================================
+# NUEVO MÓDULO: ANALYTICS & REPORTERÍA EJECUTIVO
+# ============================================================
+def mostrar_analytics():
+    st.title("📊 Analytics & Reportería Ejecutivo")
+    
+    if st.session_state.df_resultados is None:
+        st.error("⚠️ Para visualizar el Dashboard de Analytics, primero debes cargar tu base de datos en el módulo 'Cubicadora WMS'.")
+        return
+
+    df_res = st.session_state.df_resultados.copy()
+    MAPA = st.session_state.mapa_columnas
+
+    # Cálculos globales
+    df_res['Stock_Num'] = pd.to_numeric(df_res[MAPA['stock']], errors='coerce').fillna(0)
+    df_res['Peso_Num'] = pd.to_numeric(df_res[MAPA['peso']], errors='coerce').fillna(0)
+    
+    # Calcular métricas para Excel y Óptimo
+    metrics_excel = [calcular_metricas_dinamicas(row, MAPA, "EXCEL") for _, row in df_res.iterrows()]
+    metrics_opt = [calcular_metricas_dinamicas(row, MAPA, "OPTIMO") for _, row in df_res.iterrows()]
+
+    df_res['Pallets_Req_Excel'] = [m['Pallets'] for m in metrics_excel]
+    df_res['Pallets_Req_Optimo'] = [m['Pallets'] for m in metrics_opt]
+    df_res['Cap_Excel_Used'] = [m['Capacidad_Usada'] for m in metrics_excel]
+    df_res['Cap_Opt_Used'] = [m['Capacidad_Usada'] for m in metrics_opt]
+    df_res['Ocupacion_Ult_Pct'] = [m['Ocupacion_Ultimo'] for m in metrics_excel]
+    df_res['Estado_Sku'] = [m['Estado'] for m in metrics_excel]
+
+    # Cálculos Volumétricos
+    largo_m = pd.to_numeric(df_res[MAPA['largo']], errors='coerce').fillna(0) / 100.0
+    ancho_m = pd.to_numeric(df_res[MAPA['ancho']], errors='coerce').fillna(0) / 100.0
+    alto_m = pd.to_numeric(df_res[MAPA['alto']], errors='coerce').fillna(0) / 100.0
+    vol_unit_m3 = largo_m * ancho_m * alto_m
+    df_res['Volumen_Total_M3'] = vol_unit_m3 * df_res['Stock_Num']
+
+    tot_pallets_excel = df_res['Pallets_Req_Excel'].sum()
+    tot_pallets_opt = df_res['Pallets_Req_Optimo'].sum()
+    ahorro_pallets = tot_pallets_excel - tot_pallets_opt
+    pct_ahorro = (ahorro_pallets / tot_pallets_excel * 100) if tot_pallets_excel > 0 else 0
+    vol_total_bodega = df_res['Volumen_Total_M3'].sum()
+    num_alertas = sum(1 for m in metrics_excel if "❌" in m["Estado"] or "⚠️" in m["Estado"] or "🚨" in m["Estado"])
+
+    # 1. MACRO KPIs
+    st.markdown("### 📈 Indicadores Macro de Almacenamiento")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("📦 Volumen Total Carga", f"{vol_total_bodega:,.1f} m³")
+    m2.metric("🏗️ Pallets Requeridos (Excel)", f"{tot_pallets_excel:,} pal")
+    m3.metric("🎯 Pallets Requeridos (Óptimo)", f"{tot_pallets_opt:,} pal", delta=f"{-ahorro_pallets:,} pal ({pct_ahorro:.1f}%)", delta_color="inverse")
+    m4.metric("🚨 SKUs con Alertas", f"{num_alertas} SKUs", delta="Atención Requerida" if num_alertas > 0 else "Todo OK", delta_color="off")
+
+    st.markdown("---")
+
+    # 2. FILA DE GRÁFICOS 1
+    g1, g2 = st.columns(2)
+
+    with g1:
+        st.markdown("#### 🍩 Distribución de SKUs por Formato de Envase")
+        df_formato = df_res[MAPA['formato']].value_counts().reset_index()
+        df_formato.columns = ['Formato', 'Cantidad']
+        fig_donut = px.pie(df_formato, values='Cantidad', names='Formato', hole=0.4, color_discrete_sequence=px.colors.qualitative.Bold)
+        fig_donut.update_layout(margin=dict(l=20, r=20, t=30, b=20), height=350)
+        st.plotly_chart(fig_donut, use_container_width=True)
+
+    with g2:
+        st.markdown("#### 📊 Top 10 SKUs con Mayor Requerimiento de Pallets")
+        df_top10 = df_res.sort_values(by='Pallets_Req_Excel', ascending=False).head(10)
+        fig_top = px.bar(df_top10, x='Pallets_Req_Excel', y=MAPA['sku'], orientation='h', text='Pallets_Req_Excel', color='Pallets_Req_Excel', color_continuous_scale='Blues')
+        fig_top.update_layout(yaxis=dict(autorange="reversed"), margin=dict(l=20, r=20, t=30, b=20), height=350, showlegend=False)
+        st.plotly_chart(fig_top, use_container_width=True)
+
+    st.markdown("---")
+
+    # 3. FILA DE GRÁFICOS 2
+    g3, g4 = st.columns(2)
+
+    with g3:
+        st.markdown("#### 📉 Comparativa de Pallets: Excel vs. Óptimo (Top 15 SKUs)")
+        df_comp = df_res.head(15)
+        fig_comp = go.Figure()
+        fig_comp.add_trace(go.Bar(x=df_comp[MAPA['sku']], y=df_comp['Pallets_Req_Excel'], name='Excel (Manual)', marker_color='#3b82f6'))
+        fig_comp.add_trace(go.Bar(x=df_comp[MAPA['sku']], y=df_comp['Pallets_Req_Optimo'], name='Óptimo Algorítmico', marker_color='#10b981'))
+        fig_comp.update_layout(barmode='group', margin=dict(l=20, r=20, t=30, b=20), height=350, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+        st.plotly_chart(fig_comp, use_container_width=True)
+
+    with g4:
+        st.markdown("#### ⚖️ Matriz Peso por Pallet vs. % Ocupación Último Pallet")
+        df_res['Peso_Pallet_Kg'] = [m['Peso_Pallet'] for m in metrics_excel]
+        fig_scatter = px.scatter(
+            df_res, x='Ocupacion_Ult_Pct', y='Peso_Pallet_Kg', size='Stock_Num', color='Estado_Sku',
+            hover_name=MAPA['sku'], labels={'Ocupacion_Ult_Pct': '% Ocupación Último Pallet', 'Peso_Pallet_Kg': 'Peso Total Pallet (kg)'},
+            color_discrete_map={"✅ OK": "#10b981", "❌ SIN STOCK": "#64748b", "⚠️ REVISAR DATOS": "#f59e0b", "🚨 SOBREPESO (>1200kg)": "#ef4444"}
+        )
+        fig_scatter.add_hline(y=MAX_PESO_PALLET, line_dash="dash", line_color="red", annotation_text="Límite Peso (1200kg)")
+        fig_scatter.update_layout(margin=dict(l=20, r=20, t=30, b=20), height=350)
+        st.plotly_chart(fig_scatter, use_container_width=True)
+
+
+# ============================================================
 # 6. MENÚ DE NAVEGACIÓN PRINCIPAL (SIDEBAR)
 # ============================================================
 
-menu_opciones = ["🏠 Portada Principal", "📦 Cubicadora WMS", "🏗️ Layout de Bodega"]
+menu_opciones = ["🏠 Portada Principal", "📦 Cubicadora WMS", "🏗️ Layout de Bodega", "📊 Analytics & Reportería"]
 st.session_state.menu_seleccion = st.sidebar.radio(
     "Navegación", 
     menu_opciones,
@@ -863,8 +909,9 @@ st.session_state.menu_seleccion = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v4.3 • Balanced Tech")
+st.sidebar.caption("WMS Analytics Hub v5.0 • Executive Suite")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
 elif st.session_state.menu_seleccion == "🏗️ Layout de Bodega": mostrar_layout()
+elif st.session_state.menu_seleccion == "📊 Analytics & Reportería": mostrar_analytics()
