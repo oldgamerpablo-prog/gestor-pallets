@@ -16,6 +16,10 @@ st.set_page_config(page_title="WMS Analytics Hub", layout="wide", page_icon="�
 MAX_PESO_PALLET = 1200
 PESO_MADERA_PALLET = 25
 
+# Memoria de Navegación
+if "menu_seleccion" not in st.session_state:
+    st.session_state.menu_seleccion = "🏠 Portada Principal"
+
 # Memoria Cubicadora
 if "skus_activos" not in st.session_state: st.session_state.skus_activos = []
 if "df_original" not in st.session_state: st.session_state.df_original = None
@@ -276,10 +280,7 @@ def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
                 cx, cy = c['x'] + c['largo']/2, c['y'] + c['ancho']/2
                 traces.append(crear_cilindro_solido_cm(cx, cy, z_base, radio - 0.2, alto - 0.5, color_carga))
                 theta = np.linspace(0, 2*np.pi, 24)
-                traces.append(go.Scatter3d(
-                    x=cx + (radio - 0.2) * np.cos(theta), y=cy + (radio - 0.2) * np.sin(theta), z=np.full(24, z_base + alto - 0.5),
-                    mode='lines', line=dict(color='#1e3a8a', width=3), showlegend=False, hoverinfo='none'
-                ))
+                traces.append(go.Scatter3d(x=cx + (radio - 0.2) * np.cos(theta), y=cy + (radio - 0.2) * np.sin(theta), z=np.full(24, z_base + alto - 0.5), mode='lines', line=dict(color='#1e3a8a', width=3), showlegend=False, hoverinfo='none'))
             else:
                 gap = 0.5
                 x_c, y_c = c['x'] + gap/2, c['y'] + gap/2
@@ -303,37 +304,30 @@ def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
 def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     l_m, a_m, alt_m = conf['l_bod'], conf['a_bod'], conf['alt_bod']
     w_p, flujo = conf['ancho_porton'], conf['tipo_flujo']
-
     staging_zones = []
     if w_p > 0 and flujo != 'Ninguno':
         if 'Flujo en U' in flujo: staging_zones.extend([{'x1': l_m*0.25 - w_p/2, 'y1': 0, 'x2': l_m*0.25 + w_p/2, 'y2': 6}, {'x1': l_m*0.75 - w_p/2, 'y1': 0, 'x2': l_m*0.75 + w_p/2, 'y2': 6}])
         elif 'Flujo en I' in flujo: staging_zones.extend([{'x1': l_m/2 - w_p/2, 'y1': 0, 'x2': l_m/2 + w_p/2, 'y2': 6}, {'x1': l_m/2 - w_p/2, 'y1': a_m-6, 'x2': l_m/2 + w_p/2, 'y2': a_m}])
         elif 'Flujo en L' in flujo: staging_zones.extend([{'x1': max(1, l_m*0.15 - w_p/2), 'y1': 0, 'x2': max(1, l_m*0.15 - w_p/2)+w_p, 'y2': 6}, {'x1': l_m-6, 'y1': max(1, a_m*0.85 - w_p/2), 'x2': l_m, 'y2': max(1, a_m*0.85 - w_p/2)+w_p}])
-
     oficinas_list = [{'x': conf['ofi_pos_x'], 'y': conf['ofi_pos_y'], 'w': conf['ofi_largo'], 'd': conf['ofi_ancho'], 'h': conf['ofi_alto']}] if conf['ofi_largo'] > 0 else []
-
     ap_w, pp_d = 1.2, 1.2
     ap_h = float(df_activa['Alto_m'].max()) if not df_activa.empty else 1.2
     pas_w, c_ptrans, a_ptrans = conf['pasillo'], conf['cant_pas_trans'], conf['ancho_pas_trans'] if conf['cant_pas_trans'] > 0 else 0.0
-
     virt_l_m, virt_a_m = (a_m, l_m) if is_vertical else (l_m, a_m)
     t_marco, holgura_viga, holgura_lateral, viga_h = 0.10, 0.15, 0.10, 0.12
     l_modulo = (ap_w * pal_v) + (holgura_lateral * (pal_v + 1)) + t_marco
     alt_nivel_viga = ap_h + holgura_viga + viga_h
-
     niveles_operativos = sum(1 for n in range(50) if n*alt_nivel_viga+ap_h+0.15 <= alt_m and n*alt_nivel_viga <= conf['alt_grua'])
     ancho_bloque = (pp_d * 2) + pas_w
     filas = math.floor(virt_a_m / ancho_bloque)
     num_secciones = c_ptrans + 1
     modulos_por_seccion = math.floor(((virt_l_m - 4.0 - (c_ptrans * a_ptrans)) / num_secciones) / l_modulo) if num_secciones > 0 else 0
-
     cx, cy = conf['cant_pilares_x'], conf['cant_pilares_y']
     dp_x, dp_y = conf['dist_pilares_x'], conf['dist_pilares_y']
     dp_x_real, nx = (l_m / (cx + 1), cx) if cx > 0 else (dp_x, math.floor(l_m / dp_x) if dp_x > 0 else 0)
     dp_y_real, ny = (a_m / (cy + 1), cy) if cy > 0 else (dp_y, math.floor(a_m / dp_y) if dp_y > 0 else 0)
     pilares_reales = [(px * dp_x_real, py * dp_y_real) for px in range(1, nx + 1) for py in range(1, ny + 1)]
     virt_pilares = [(py, px) for px, py in pilares_reales] if is_vertical else pilares_reales
-
     modulos_validos = 0
     modulos_list = []
     almacen = []
@@ -356,7 +350,6 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
                         for st_z in staging_zones:
                             if not (rx2 < st_z['x1'] or rx1 > st_z['x2'] or ry2 < st_z['y1'] or ry1 > st_z['y2']): eliminado = True; break
                     if eliminado: continue
-
                     bloqueado_pilar = any((x_pos <= px <= x_pos + l_modulo) and (y_rack - 0.25 <= py <= y_rack + pp_d + 0.25) for px, py in virt_pilares)
                     modulos_list.append({'x': x_pos, 'y': y_rack, 'bloqueado': bloqueado_pilar})
                     
@@ -371,13 +364,11 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
                                     'x': x_pos, 'y': y_rack, 'x_pal': x_pal, 'z': z_piso, 'ocupado': False, 'sku': None, 'alt_p': 0
                                 })
 
-    # Alocación de SKUs
     almacen.sort(key=lambda x: (x['nivel'], x['pasillo'], x['modulo'], x['lado'], x['slot']))
     resumen_ubicacion = []
     for _, row in df_activa.iterrows():
         sku, cant = str(row['SKU']).strip().upper(), int(row['Cantidad_Pallets'])
         alto_real_sku = float(row['Alto_m']) if 'Alto_m' in row else ap_h
-
         ubicados = 0
         for slot in almacen:
             if ubicados >= cant: break
@@ -450,14 +441,12 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas)
     for mod in res['modulos_list']:
         x_pos, y_rack = mod['x'], mod['y']
         c_activa = capa_marcos_bloqueados if mod['bloqueado'] else capa_marcos
-
         add_cube_rotated(c_activa, x_pos, y_rack, 0, t, res['pp_d'], t, is_vertical)
         add_cube_rotated(c_activa, x_pos, y_rack, 0, t, t, h_rack, is_vertical)
         add_cube_rotated(c_activa, x_pos, y_rack + res['pp_d'] - t, 0, t, t, h_rack, is_vertical)
         add_cube_rotated(c_activa, x_pos + res['l_modulo'] - t, y_rack, 0, t, t, h_rack, is_vertical)
         add_cube_rotated(c_activa, x_pos + res['l_modulo'] - t, y_rack + res['pp_d'] - t, 0, t, t, h_rack, is_vertical)
         add_cube_rotated(c_activa, x_pos, y_rack, h_rack, res['l_modulo'], res['pp_d'], 0.05, is_vertical)
-
         c_viga = capa_marcos_bloqueados if mod['bloqueado'] else capa_vigas
         for n_v in range(1, res['niveles']):
             z_v = n_v * res['alt_nivel_viga'] - res['viga_h']
@@ -495,23 +484,40 @@ def mostrar_portada():
         <p style="font-size: 1.3rem; color: #cbd5e1; max-width: 800px; margin: 0 auto; line-height: 1.6;">Plataforma integral de ingeniería logística para la optimización de almacenamiento, cubicación geométrica y diseño avanzado de layout de bodegas.</p>
     </div>
     """, unsafe_allow_html=True)
+
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("""<div style="background: white; padding: 40px; border-radius: 12px; border: 1px solid #e2e8f0; height: 100%;">
-            <div style="font-size: 3rem; margin-bottom: 15px;">📦</div><h2 style="color: #0f172a; margin-top: 0; font-weight: 800;">Cubicadora de Pallets</h2>
-            <p style="color: #475569; font-size: 1.1rem;">Optimiza la estiba de productos, calcula capacidades y genera renders 2D/3D.</p><p style="color: #3b82f6; font-weight: 700;">👉 Accede desde el menú lateral</p></div>""", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="background: white; padding: 30px 30px 10px 30px; border-radius: 12px 12px 0 0; border: 1px solid #e2e8f0; border-bottom: none;">
+            <div style="font-size: 3rem; margin-bottom: 15px;">📦</div>
+            <h2 style="color: #0f172a; margin-top: 0; font-weight: 800;">Cubicadora de Pallets</h2>
+            <p style="color: #475569; font-size: 1.1rem; line-height: 1.5;">Optimiza la estiba de productos, calcula capacidades y genera renders 2D y 3D interactivos.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("🚀 Ingresar a Cubicadora", key="btn_cub", type="primary", use_container_width=True):
+            st.session_state.menu_seleccion = "📦 Cubicadora WMS"
+            st.rerun()
+    
     with col2:
-        st.markdown("""<div style="background: white; padding: 40px; border-radius: 12px; border: 1px solid #e2e8f0; height: 100%;">
-            <div style="font-size: 3rem; margin-bottom: 15px;">🏗️</div><h2 style="color: #0f172a; margin-top: 0; font-weight: 800;">Layout de Bodega</h2>
-            <p style="color: #475569; font-size: 1.1rem;">Mapeo de almacén, optimización de rutas y validación matemática contra demanda.</p><p style="color: #3b82f6; font-weight: 700;">👉 Accede desde el menú lateral</p></div>""", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="background: white; padding: 30px 30px 10px 30px; border-radius: 12px 12px 0 0; border: 1px solid #e2e8f0; border-bottom: none;">
+            <div style="font-size: 3rem; margin-bottom: 15px;">🏗️</div>
+            <h2 style="color: #0f172a; margin-top: 0; font-weight: 800;">Layout de Bodega</h2>
+            <p style="color: #475569; font-size: 1.1rem; line-height: 1.5;">Mapeo visual de almacén, optimización de espacios y validación matemática contra demanda.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        if st.button("🚀 Ingresar a Layout", key="btn_lay", type="primary", use_container_width=True):
+            st.session_state.menu_seleccion = "🏗️ Layout de Bodega"
+            st.rerun()
 
 def mostrar_cubicadora():
     st.markdown(css_styles, unsafe_allow_html=True)
     st.title("📦 Cubicadora de Palletización Masiva")
 
-    archivo_subido = st.file_uploader("📂 Sube tu archivo Excel con la base de datos", type=["xlsx"])
+    archivo_subido = st.file_uploader("📂 Sube tu archivo Excel con la base de datos (Ej: cubicadora pablo.xlsx)", type=["xlsx"])
+
     if archivo_subido is not None:
-        with st.spinner("Procesando base de datos..."):
+        with st.spinner("Procesando toda la base de datos..."):
             try: df_original = pd.read_excel(archivo_subido, sheet_name="Data Equipo 7")
             except: df_original = pd.read_excel(archivo_subido, sheet_name=0)
             df_res, MAPA = procesar_datos(df_original.dropna(how="all").reset_index(drop=True))
@@ -704,22 +710,18 @@ def mostrar_layout():
         fig_2d.update_layout(title="Plano CAD 2D del Centro de Distribución", xaxis=dict(range=[-2, l_m+2]), yaxis=dict(range=[-2, a_m+2], scaleanchor="x", scaleratio=1), height=600, margin=dict(l=0, r=0, t=40, b=0))
         st.plotly_chart(fig_2d, use_container_width=True)
 
-        # ====== BOTÓN PARA GEMELO DIGITAL 3D ======
-        st.markdown("<hr>", unsafe_allow_html=True)
-        st.session_state.mostrar_3d_layout = st.toggle("🧊 Cargar Gemelo Digital 3D (Puede tardar unos segundos dependiendo del tamaño de tu bodega)")
-        
-        if st.session_state.mostrar_3d_layout:
-            with st.spinner("Construyendo Mallas 3D de la Bodega..."):
-                fig_3d = generar_layout_3d(res, l_m, a_m, st.session_state.alt_bod, is_vert, skus_buscados, puertas)
-                st.plotly_chart(fig_3d, use_container_width=True)
-
 # ============================================================
 # 6. MENÚ DE NAVEGACIÓN PRINCIPAL (SIDEBAR)
 # ============================================================
-menu_seleccion = st.sidebar.radio("Navegación", ["🏠 Portada Principal", "📦 Cubicadora WMS", "🏗️ Layout de Bodega"])
-st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v3.1")
 
-if menu_seleccion == "🏠 Portada Principal": mostrar_portada()
-elif menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
-elif menu_seleccion == "🏗️ Layout de Bodega": mostrar_layout()
+st.sidebar.radio(
+    "Navegación", 
+    ["🏠 Portada Principal", "📦 Cubicadora WMS", "🏗️ Layout de Bodega"],
+    key="menu_seleccion"
+)
+st.sidebar.markdown("---")
+st.sidebar.caption("WMS Analytics Hub v3.2")
+
+if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
+elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
+elif st.session_state.menu_seleccion == "🏗️ Layout de Bodega": mostrar_layout()
