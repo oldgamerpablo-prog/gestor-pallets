@@ -9,12 +9,18 @@ import unicodedata
 import io
 
 # ============================================================
-# CONFIGURACIÓN DE LA PÁGINA
+# CONFIGURACIÓN Y MEMORIA (SESSION STATE)
 # ============================================================
 st.set_page_config(page_title="WMS Analytics: Paletizado", layout="wide", page_icon="📦")
 
 MAX_PESO_PALLET = 1200
 PESO_MADERA_PALLET = 25
+
+# Memoria para que no se borre la búsqueda al hacer clic en el 3D
+if "sku_buscado" not in st.session_state:
+    st.session_state.sku_buscado = ""
+if "mostrar_3d" not in st.session_state:
+    st.session_state.mostrar_3d = False
 
 css_styles = """
 <style>
@@ -27,21 +33,20 @@ css_styles = """
 """
 
 # ============================================================
-# UTILIDADES Y DETECCIÓN
+# FUNCIONES MATEMÁTICAS (Idénticas a tu Colab)
 # ============================================================
 def norm_txt(valor):
     texto = "" if valor is None else str(valor)
     texto = unicodedata.normalize("NFKD", texto).encode("ascii", "ignore").decode("ascii")
-    texto = texto.lower().strip()
-    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", texto)).strip()
+    return re.sub(r"\s+", " ", re.sub(r"[^a-z0-9]+", " ", texto.lower().strip())).strip()
 
 def es_numero(valor):
     try: return pd.notna(valor) and math.isfinite(float(valor))
-    except Exception: return False
+    except: return False
 
 def a_float(valor, default=np.nan):
     try: return float(valor) if pd.notna(valor) else default
-    except Exception: return default
+    except: return default
 
 def fmt(valor, dec=1): return f"{float(valor):,.{dec}f}" if es_numero(valor) else "N/D"
 
@@ -51,17 +56,20 @@ def encontrar_columna(columnas, incluir, excluir=()):
         if all(p in n for p in incluir) and not any(p in n for p in excluir): return col
     return None
 
-def detectar_columnas(df):
-    cols = list(df.columns)
+@st.cache_data
+def procesar_datos(df_original):
+    cols = list(df_original.columns)
     normalizados = {c: norm_txt(c) for c in cols}
     mapa = {}
     mapa["sku"] = encontrar_columna(cols, ["codigo", "producto"]) or encontrar_columna(cols, ["sku"]) or encontrar_columna(cols, ["codigo"])
     mapa["stock"] = encontrar_columna(cols, ["stock", "promedio"])
     mapa["peso"] = me = encontrar_columna(cols, ["peso"], ["total", "pallet"])
     mapa["formato"] = encontrar_columna(cols, ["formato", "principal"])
+    
     largos = [c for c in cols if "largo" in normalizados[c] and "pallet" not in normalizados[c]]
     anchos = [c for c in cols if "ancho" in normalizados[c] and "pallet" not in normalizados[c]]
     altos = [c for c in cols if "alto" in normalizados[c] and "pallet" not in normalizados[c] and "altura" not in normalizados[c]]
+    
     mapa["largo"] = largos[0] if largos else None
     mapa["ancho"] = anchos[0] if anchos else None
     if mapa["ancho"] is None and len(largos) >= 2: mapa["ancho"] = largos[1]
@@ -71,12 +79,11 @@ def detectar_columnas(df):
     mapa["altura_pallet"] = encontrar_columna(cols, ["altura", "pallet"], ["total", "paletizada"]) or me_lp or me_ap
     mapa["unidades_pallet"] = encontrar_columna(cols, ["unidades", "pallet"])
     mapa["altura_total"] = encontrar_columna(cols, ["altura", "total", "pallet"]) or me or encontrar_columna(cols, ["altura", "paletizada"])
-    return mapa
-
-# ============================================================
-# CÁLCULOS LOGÍSTICOS
-# ============================================================
-def es_formato_circular(formato): return any(k in norm_txt(formato) for k in ["tambor", "balde", "bidon", "cunete", "barril", "tarro", "lata"])
+    
+    df_trabajo = df_original.copy()
+    df_trabajo[mapa["sku"]] = df_trabajo[mapa["sku"]].astype(str).str.strip()
+    precalculos = df_trabajo.apply(lambda fila: precalcular_fila(fila, mapa), axis=1)
+    return pd.concat([df_trabajo, precalculos], axis=1), mapa
 
 def mejor_distribucion_filas(largo, ancho, largo_pallet, ancho_pallet):
     valores = [largo, ancho, largo_pallet, ancho_pallet]
@@ -147,20 +154,14 @@ def calcular_metricas_dinamicas(fila, mapa, modo="EXCEL"):
     cap_excel = a_float(fila.get("Capacidad_Excel"), 0)
     cap_optima = int(fila.get("Capacidad_Optima", 0))
     peso_unitario = a_float(valor_col(fila, "peso", mapa))
-    largo, ancho, alto = a_float(valor_col(fila, "largo", mapa)), a_float(valor_col(fila, "ancho", mapa)), a_float(valor_col(fila, "alto", mapa))
-    largo_pallet, ancho_pallet, altura_pallet = a_float(valor_col(fila, "largo_pallet", mapa), 120), a_float(valor_col(fila, "ancho_pallet", mapa), 120), a_float(valor_col(fila, "altura_pallet", mapa), 15)
-    altura_total = a_float(valor_col(fila, "altura_total", mapa))
-
-    if modo == "OPTIMO":
-        cap_usada = cap_optima if cap_optima > 0 else int(round(cap_excel)) if es_numero(cap_excel) else 0
-    else:
-        cap_usada = int(round(cap_excel)) if (es_numero(cap_excel) and cap_excel > 0) else cap_optima
+    
+    if modo == "OPTIMO": cap_usada = cap_optima if cap_optima > 0 else int(round(cap_excel)) if es_numero(cap_excel) else 0
+    else: cap_usada = int(round(cap_excel)) if (es_numero(cap_excel) and cap_excel > 0) else cap_optima
 
     pallets = int(math.ceil(stock / cap_usada)) if stock > 0 and cap_usada > 0 else 0
     ult_unids = (stock - (pallets - 1) * cap_usada) if pallets > 0 else 0
     if ult_unids == 0 and stock > 0: ult_unids = cap_usada
     ult_pct = (ult_unids / cap_usada * 100) if cap_usada > 0 else 0
-
     peso_pallet = (cap_usada * peso_unitario) + PESO_MADERA_PALLET if es_numero(peso_unitario) else np.nan
 
     estado = "✅ OK"
@@ -169,92 +170,72 @@ def calcular_metricas_dinamicas(fila, mapa, modo="EXCEL"):
     elif es_numero(peso_pallet) and peso_pallet > MAX_PESO_PALLET: estado = "🚨 SOBREPESO (>1200kg)"
     
     return {
-        "Capacidad_Usada": cap_usada, "Pallets": pallets,
-        "Unidades_Ultimo": ult_unids, "Ocupacion_Ultimo": ult_pct,
-        "Peso_Pallet": peso_pallet, "Estado": estado
+        "Capacidad_Usada": cap_usada, "Pallets": pallets, "Unidades_Ultimo": ult_unids, 
+        "Ocupacion_Ultimo": ult_pct, "Peso_Pallet": peso_pallet, "Estado": estado,
+        "Cap_Excel": cap_excel, "Cap_Optima": cap_optima
     }
 
 # ============================================================
-# GENERACIÓN DE GRÁFICOS 2D (HTML/CSS)
+# RENDERIZADO VISUAL HTML/CSS/PLOTLY
 # ============================================================
+def es_formato_circular(formato): return any(k in norm_txt(formato) for k in ["tambor", "balde", "bidon", "cunete", "barril", "tarro", "lata"])
+
 def get_material_css(formato):
     n = norm_txt(formato)
-    if any(k in n for k in ["tambor", "balde", "bidon", "lata"]):
-        return {"bg_top": "radial-gradient(circle at 35% 35%, #93c5fd, #1d4ed8)", "bg_side": "linear-gradient(to right, #1e3a8a, #60a5fa 30%, #3b82f6 60%, #1e3a8a)", "border": "#1e3a8a", "radius": "50%", "shadow": "inset -3px -3px 6px rgba(0,0,0,0.4), 2px 3px 5px rgba(0,0,0,0.25)"}
-    if "bin" in n or "cubeta" in n:
-        return {"bg_top": "linear-gradient(135deg, #34d399, #059669)", "bg_side": "linear-gradient(to bottom, #34d399, #059669)", "border": "#064e3b", "radius": "6px", "shadow": "inset -2px -2px 5px rgba(0,0,0,0.3), inset 2px 2px 3px rgba(255,255,255,0.4), 2px 3px 4px rgba(0,0,0,0.2)"}
+    if any(k in n for k in ["tambor", "balde", "bidon", "lata"]): return {"bg_top": "radial-gradient(circle at 35% 35%, #93c5fd, #1d4ed8)", "bg_side": "linear-gradient(to right, #1e3a8a, #60a5fa 30%, #3b82f6 60%, #1e3a8a)", "border": "#1e3a8a", "radius": "50%", "shadow": "inset -3px -3px 6px rgba(0,0,0,0.4), 2px 3px 5px rgba(0,0,0,0.25)"}
+    if "bin" in n or "cubeta" in n: return {"bg_top": "linear-gradient(135deg, #34d399, #059669)", "bg_side": "linear-gradient(to bottom, #34d399, #059669)", "border": "#064e3b", "radius": "6px", "shadow": "inset -2px -2px 5px rgba(0,0,0,0.3), inset 2px 2px 3px rgba(255,255,255,0.4), 2px 3px 4px rgba(0,0,0,0.2)"}
     return {"bg_top": "linear-gradient(135deg, #e5c07b, #c6893f)", "bg_side": "linear-gradient(to bottom, #d4a373, #a67232)", "border": "#8b5a2b", "radius": "2px", "shadow": "inset -2px -2px 4px rgba(0,0,0,0.2), inset 1px 1px 2px rgba(255,255,255,0.3), 2px 3px 5px rgba(0,0,0,0.2)"}
 
-def html_vista_superior(fila, mapa):
+def html_vista_superior(fila, mapa, cantidad_unidades=None):
     lp, ap = a_float(valor_col(fila, "largo_pallet", mapa), 120), a_float(valor_col(fila, "ancho_pallet", mapa), 120)
     layout = mejor_distribucion_filas(a_float(valor_col(fila, "largo", mapa)), a_float(valor_col(fila, "ancho", mapa)), lp, ap)
-    if layout["cantidad"] <= 0: return """<div style="text-align:center; padding:30px;">Faltan dimensiones.</div>"""
+    if layout["cantidad"] <= 0: return "<div style='text-align:center; padding:30px;'>Faltan dimensiones.</div>"
 
-    escala = min(250 / lp, 250 / ap, 2.0)
+    escala = min(220 / lp, 220 / ap, 2.0)
     mat = get_material_css(valor_col(fila, "formato", mapa))
-
+    
     cajas_a_dibujar = layout["cajas"]
-    objetos = [f"""<div class="box-3d" title="Caja {i}: {c['largo']}x{c['ancho']}cm" style="position:absolute; left:{c['x']*escala:.2f}px; top:{c['y']*escala:.2f}px; width:{c['largo']*escala:.2f}px; height:{c['ancho']*escala:.2f}px; box-sizing:border-box; background:{mat['bg_top']}; border:1px solid {mat['border']}; border-radius:{mat['radius']}; box-shadow:{mat['shadow']}; color:white; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; z-index: 10;">{i}</div>""" for i, c in enumerate(cajas_a_dibujar, 1)]
+    if cantidad_unidades is not None:
+        unids_nivel = layout["cantidad"]
+        items_capa = int(cantidad_unidades) % unids_nivel
+        if items_capa == 0 and cantidad_unidades > 0: items_capa = unids_nivel
+        cajas_a_dibujar = layout["cajas"][:items_capa]
+
+    objetos = [f"<div class='box-3d' style='position:absolute; left:{c['x']*escala:.2f}px; top:{c['y']*escala:.2f}px; width:{c['largo']*escala:.2f}px; height:{c['ancho']*escala:.2f}px; box-sizing:border-box; background:{mat['bg_top']}; border:1px solid {mat['border']}; border-radius:{mat['radius']}; box-shadow:{mat['shadow']}; color:white; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; z-index: 10;'>{i}</div>" for i, c in enumerate(cajas_a_dibujar, 1)]
     pallet_bg = "background-color: #d39e66; background-image: repeating-linear-gradient(90deg, transparent, transparent 15%, rgba(100,50,0,0.15) 15%, rgba(100,50,0,0.15) 17%); box-shadow: 4px 6px 12px rgba(0,0,0,0.25);"
+    return f"<div style='position:relative; width:{lp*escala + 30:.2f}px; height:{ap*escala + 30:.2f}px; margin: 10px auto;'><div class='cota-linea' style='top: 0; left: 0; width: {lp*escala}px; height: 10px;'><span class='cota-texto'>{fmt(lp,0)} cm</span></div><div class='cota-linea-v' style='top: 15px; right: 0; width: 10px; height: {ap*escala}px;'><span class='cota-texto' style='transform: rotate(90deg); white-space:nowrap;'>{fmt(ap,0)} cm</span></div><div style='position:absolute; top:15px; left:0; width:{lp*escala:.2f}px; height:{ap*escala:.2f}px; {pallet_bg} border: 2px solid #8b5a2b; border-radius: 4px;'>{''.join(objetos)}</div></div>"
 
-    return f"""
-    <div style="position:relative; width:{lp*escala + 30:.2f}px; height:{ap*escala + 30:.2f}px; margin: 10px auto;">
-        <div class="cota-linea" style="top: 0; left: 0; width: {lp*escala}px; height: 10px;"><span class="cota-texto">{fmt(lp,0)} cm</span></div>
-        <div class="cota-linea-v" style="top: 15px; right: 0; width: 10px; height: {ap*escala}px;"><span class="cota-texto" style="transform: rotate(90deg); white-space:nowrap;">{fmt(ap,0)} cm</span></div>
-        <div style="position:absolute; top:15px; left:0; width:{lp*escala:.2f}px; height:{ap*escala:.2f}px; {pallet_bg} border: 2px solid #8b5a2b; border-radius: 4px;">
-            { ''.join(objetos) }
-        </div>
-    </div>
-    """
+def html_vista_lateral(fila, mapa, cap_usada, total_unidades=None):
+    lp, hp, ap = a_float(valor_col(fila, "largo_pallet", mapa), 120), a_float(valor_col(fila, "altura_pallet", mapa), 15), a_float(valor_col(fila, "ancho_pallet", mapa), 120)
+    alto, altura_total, largo, ancho = a_float(valor_col(fila, "alto", mapa)), a_float(valor_col(fila, "altura_total", mapa)), a_float(valor_col(fila, "largo", mapa)), a_float(valor_col(fila, "ancho", mapa))
 
-def html_vista_lateral(fila, mapa, cap_usada):
-    lp, hp = a_float(valor_col(fila, "largo_pallet", mapa), 120), a_float(valor_col(fila, "altura_pallet", mapa), 15)
-    ap = a_float(valor_col(fila, "ancho_pallet", mapa), 120)
-    alto, altura_total = a_float(valor_col(fila, "alto", mapa)), a_float(valor_col(fila, "altura_total", mapa))
-    largo, ancho = a_float(valor_col(fila, "largo", mapa)), a_float(valor_col(fila, "ancho", mapa))
-
-    if not all([es_numero(x) and x > 0 for x in [lp, hp, alto]]): return """<div style="text-align:center; padding:30px;">Faltan datos.</div>"""
-
+    if not all([es_numero(x) and x > 0 for x in [lp, hp, alto]]): return "<div style='text-align:center; padding:30px;'>Faltan datos.</div>"
     layout = mejor_distribucion_filas(largo, ancho, lp, ap)
     unids_nivel = layout["cantidad"]
     if unids_nivel <= 0: return ""
 
-    target_units = int(cap_usada)
-    cajas_frontales = [c for c in layout["cajas"] if abs(c["y"]) < 1e-5]
-    columnas = len(cajas_frontales) if cajas_frontales else 1
+    target_units = int(cap_usada) if total_unidades is None else int(total_unidades)
+    columnas = len([c for c in layout["cajas"] if abs(c["y"]) < 1e-5]) or 1
 
     niveles_completos = target_units // unids_nivel
     unidades_sobrantes = target_units % unids_nivel
     tot_niveles = niveles_completos + (1 if unidades_sobrantes > 0 else 0)
+    cajas_top = len([c for c in layout["cajas"][:unidades_sobrantes] if abs(c["y"]) < 1e-5]) if unidades_sobrantes > 0 else 0
 
     alto_visual = altura_total if es_numero(altura_total) and altura_total > hp else (hp + max(tot_niveles, 1) * alto)
-    escala_x, escala_y = min(250 / lp, 2.0), min(200 / alto_visual, 2.0)
-    w, h = lp * escala_x, alto_visual * escala_y
+    escala_x, escala_y = min(220 / lp, 2.0), min(180 / alto_visual, 2.0)
+    w, h, caja_w, caja_h = lp * escala_x, alto_visual * escala_y, (lp * escala_x) / columnas, alto * escala_y
     mat = get_material_css(valor_col(fila, "formato", mapa))
-    caja_w, caja_h = w / columnas, alto * escala_y
 
     bloques = []
     for nivel in range(niveles_completos):
         for i in range(columnas):
-            bloques.append(f"""<div class="box-3d" style="position:absolute; left:{i*caja_w:.2f}px; bottom:{hp*escala_y + nivel*caja_h:.2f}px; width:{caja_w-1:.2f}px; height:{caja_h-1:.2f}px; box-sizing:border-box; background:{mat['bg_side']}; border:1px solid {mat['border']}; border-radius:{mat['radius']}; box-shadow: inset 1px 1px 2px rgba(255,255,255,0.2), 2px 2px 4px rgba(0,0,0,0.3);"></div>""")
+            bloques.append(f"<div class='box-3d' style='position:absolute; left:{i*caja_w:.2f}px; bottom:{hp*escala_y + nivel*caja_h:.2f}px; width:{caja_w-1:.2f}px; height:{caja_h-1:.2f}px; box-sizing:border-box; background:{mat['bg_side']}; border:1px solid {mat['border']}; border-radius:{mat['radius']}; box-shadow: inset 1px 1px 2px rgba(255,255,255,0.2), 2px 2px 4px rgba(0,0,0,0.3);'></div>")
+    for i in range(cajas_top if cajas_top > 0 else (1 if unidades_sobrantes > 0 else 0)):
+        bloques.append(f"<div class='box-3d' style='position:absolute; left:{i*caja_w:.2f}px; bottom:{hp*escala_y + niveles_completos*caja_h:.2f}px; width:{caja_w-1:.2f}px; height:{caja_h-1:.2f}px; box-sizing:border-box; background:{mat['bg_side']}; border:1px solid {mat['border']}; border-radius:{mat['radius']}; box-shadow: inset 1px 1px 2px rgba(255,255,255,0.2), 2px 2px 4px rgba(0,0,0,0.3);'></div>")
 
-    return f"""
-    <div style="position:relative; width:{w + 40:.2f}px; height:{h + 30:.2f}px; margin: 10px auto;">
-        <div class="cota-linea-v" style="bottom: 0; left: 0; width: 10px; height: {h}px;"><span class="cota-texto" style="transform: rotate(-90deg); white-space:nowrap;">{fmt(alto_visual,0)} cm</span></div>
-        <div style="position:absolute; left:25px; bottom:0; width:{w:.2f}px; height:{h:.2f}px;">
-            <div style="position:absolute; left:0; bottom:0; width:{w:.2f}px; height:{hp*escala_y:.2f}px; background:#b88252; border:1px solid #754b28; border-radius:2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
-                <div style="position:absolute; left:18%; bottom:15%; width:22%; height:70%; background:#2c1b12; border-radius:2px;"></div>
-                <div style="position:absolute; right:18%; bottom:15%; width:22%; height:70%; background:#2c1b12; border-radius:2px;"></div>
-            </div>
-            {''.join(bloques)}
-            <div style="position:absolute; left:0; bottom:{h:.2f}px; width:110%; border-top:2px dashed #ef4444; z-index:20;"></div>
-            <div style="position:absolute; right:-25px; bottom:{h-10:.2f}px; font-size:10px; color:#ef4444; font-weight:700;">MÁX</div>
-        </div>
-    </div>"""
+    return f"<div style='position:relative; width:{w + 40:.2f}px; height:{h + 30:.2f}px; margin: 10px auto;'><div class='cota-linea-v' style='bottom: 0; left: 0; width: 10px; height: {h}px;'><span class='cota-texto' style='transform: rotate(-90deg); white-space:nowrap;'>{fmt(alto_visual,0)} cm</span></div><div style='position:absolute; left:25px; bottom:0; width:{w:.2f}px; height:{h:.2f}px;'><div style='position:absolute; left:0; bottom:0; width:{w:.2f}px; height:{hp*escala_y:.2f}px; background:#b88252; border:1px solid #754b28; border-radius:2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3);'><div style='position:absolute; left:18%; bottom:15%; width:22%; height:70%; background:#2c1b12; border-radius:2px;'></div><div style='position:absolute; right:18%; bottom:15%; width:22%; height:70%; background:#2c1b12; border-radius:2px;'></div></div>{''.join(bloques)}<div style='position:absolute; left:0; bottom:{h:.2f}px; width:110%; border-top:2px dashed #ef4444; z-index:20;'></div><div style='position:absolute; right:-25px; bottom:{h-10:.2f}px; font-size:10px; color:#ef4444; font-weight:700;'>MÁX</div></div></div>"
 
-# ============================================================
-# MOTOR 3D PLOTLY
-# ============================================================
 def get_box_cm(x0, y0, z0, dx, dy, dz, color):
     x = [x0, x0+dx, x0+dx, x0, x0, x0+dx, x0+dx, x0]; y = [y0, y0, y0+dy, y0+dy, y0, y0, y0+dy, y0+dy]; z = [z0, z0, z0, z0, z0+dz, z0+dz, z0+dz, z0+dz]
     i, j, k = [7,0,0,0,4,4,6,6,4,0,3,2], [3,4,1,2,5,6,5,2,0,1,6,3], [0,7,2,3,6,7,1,1,5,5,7,6]
@@ -262,8 +243,8 @@ def get_box_cm(x0, y0, z0, dx, dy, dz, color):
 
 def crear_cilindro_solido_cm(x0, y0, z0, r, h, color):
     theta = np.linspace(0, 2*np.pi, 24, endpoint=False)
-    x = x0 + r * np.cos(theta); y = y0 + r * np.sin(theta)
-    x_pts = np.concatenate([x, x, [x0, x0]]); y_pts = np.concatenate([y, y, [y0, y0]])
+    x, y = x0 + r * np.cos(theta), y0 + r * np.sin(theta)
+    x_pts, y_pts = np.concatenate([x, x, [x0, x0]]), np.concatenate([y, y, [y0, y0]])
     z_pts = np.concatenate([np.full(24, z0), np.full(24, z0+h), [z0, z0+h]])
     i, j, k = [], [], []
     for n in range(24):
@@ -272,23 +253,19 @@ def crear_cilindro_solido_cm(x0, y0, z0, r, h, color):
         i.append(48); j.append(nxt); k.append(n); i.append(49); j.append(n+24); k.append(nxt+24)
     return go.Mesh3d(x=x_pts, y=y_pts, z=z_pts, i=i, j=j, k=k, color=color, opacity=1, showscale=False, hoverinfo='none', flatshading=True)
 
-def renderizar_3d_plotly(fila, mapa, cap_usada):
+def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
     lp, ap, hp = a_float(valor_col(fila, "largo_pallet", mapa), 120), a_float(valor_col(fila, "ancho_pallet", mapa), 120), a_float(valor_col(fila, "altura_pallet", mapa), 15)
     largo, ancho, alto = a_float(valor_col(fila, "largo", mapa)), a_float(valor_col(fila, "ancho", mapa)), a_float(valor_col(fila, "alto", mapa))
-    formato = valor_col(fila, "formato", mapa)
-    target_units = int(cap_usada)
+    target_units = int(cap_usada) if total_unidades is None else int(total_unidades)
 
     layout = mejor_distribucion_filas(largo, ancho, lp, ap)
     if layout["cantidad"] <= 0 or target_units <= 0: return go.Figure()
 
     traces = []
     h_deck, h_leg, w_leg = min(3.0, hp * 0.2), hp - min(3.0, hp * 0.2), min(10.0, lp * 0.1)
-    traces.append(get_box_cm(0, 0, h_leg, lp, ap, h_deck, '#c18c5d'))
-    traces.append(get_box_cm(0, 0, 0, w_leg, ap, h_leg, '#966336'))
-    traces.append(get_box_cm((lp - w_leg) / 2, 0, 0, w_leg, ap, h_leg, '#966336'))
-    traces.append(get_box_cm(lp - w_leg, 0, 0, w_leg, ap, h_leg, '#966336'))
+    traces.extend([get_box_cm(0, 0, h_leg, lp, ap, h_deck, '#c18c5d'), get_box_cm(0, 0, 0, w_leg, ap, h_leg, '#966336'), get_box_cm((lp - w_leg)/2, 0, 0, w_leg, ap, h_leg, '#966336'), get_box_cm(lp - w_leg, 0, 0, w_leg, ap, h_leg, '#966336')])
 
-    es_cilindro = es_formato_circular(formato)
+    es_cilindro = es_formato_circular(valor_col(fila, "formato", mapa))
     color_carga = '#2563eb' if es_cilindro else '#d4a373'
 
     units_placed, nivel = 0, 0
@@ -296,46 +273,33 @@ def renderizar_3d_plotly(fila, mapa, cap_usada):
         z_base = hp + (nivel * alto)
         for c in layout["cajas"]:
             if units_placed >= target_units: break
-            x_pos, y_pos, c_l, c_a = c['x'], c['y'], c['largo'], c['ancho']
-
             if es_cilindro:
-                radio = min(c_l, c_a) / 2
-                traces.append(crear_cilindro_solido_cm(x_pos + c_l/2, y_pos + c_a/2, z_base, radio - 0.2, alto - 0.2, color_carga))
+                radio = min(c['largo'], c['ancho']) / 2
+                traces.append(crear_cilindro_solido_cm(c['x'] + c['largo']/2, c['y'] + c['ancho']/2, z_base, radio - 0.2, alto - 0.2, color_carga))
             else:
                 gap = 0.5
-                traces.append(get_box_cm(x_pos + gap/2, y_pos + gap/2, z_base, c_l - gap, c_a - gap, alto - gap/2, color_carga))
+                traces.append(get_box_cm(c['x'] + gap/2, c['y'] + gap/2, z_base, c['largo'] - gap, c['ancho'] - gap, alto - gap/2, color_carga))
             units_placed += 1
         nivel += 1
 
     fig = go.Figure(data=traces)
-    fig.update_layout(
-        scene=dict(xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False), aspectmode='data', camera=dict(eye=dict(x=1.6, y=1.6, z=1.0))),
-        margin=dict(r=0, l=0, b=0, t=0), height=400, paper_bgcolor='#f8fafc', plot_bgcolor='#f8fafc'
-    )
+    fig.update_layout(scene=dict(xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False), aspectmode='data', camera=dict(eye=dict(x=1.6, y=1.6, z=1.0))), margin=dict(r=0, l=0, b=0, t=0), height=300)
     return fig
 
 # ============================================================
-# INTERFAZ PRINCIPAL
+# INTERFAZ PRINCIPAL STREAMLIT
 # ============================================================
 st.title("📊 WMS Analytics: Dashboard de Paletización Masiva")
 
-archivo_subido = st.file_uploader("📂 Sube tu archivo Excel con la base de datos (Ej: cubicadora pablo.xlsx)", type=["xlsx"])
+archivo_subido = st.file_uploader("📂 Sube tu archivo Excel con la base de datos", type=["xlsx"])
 
 if archivo_subido is not None:
     with st.spinner("Procesando base de datos..."):
         try: df_original = pd.read_excel(archivo_subido, sheet_name="Data Equipo 7")
         except: df_original = pd.read_excel(archivo_subido, sheet_name=0)
-            
-        df_original = df_original.dropna(how="all").reset_index(drop=True)
-        MAPA = detectar_columnas(df_original)
-        df_trabajo = df_original.copy()
-        df_trabajo[MAPA["sku"]] = df_trabajo[MAPA["sku"]].astype(str).str.strip()
-        precalculos = df_trabajo.apply(lambda fila: precalcular_fila(fila, MAPA), axis=1)
-        df_resultados = pd.concat([df_trabajo, precalculos], axis=1)
+        df_resultados, MAPA = procesar_datos(df_original.dropna(how="all").reset_index(drop=True))
 
-    st.success("✅ Base de datos procesada con éxito.")
     modo = st.radio("⚙️ Selecciona el modo de cálculo:", ["EXCEL", "OPTIMO"], horizontal=True)
-    
     tot_p = sum([calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"] for _, row in df_resultados.iterrows()])
     
     col1, col2, col3 = st.columns(3)
@@ -344,48 +308,83 @@ if archivo_subido is not None:
     col3.metric("🏗️ Pallets Totales Requeridos", f"{tot_p:,}")
 
     st.markdown("---")
-    st.subheader("🔍 Buscar SKU Específico y Ver Planos de Estiba")
     
-    sku_buscado = st.text_input("Ingresa un código SKU (Ej: H-2):")
-    if st.button("Buscar Planos") and sku_buscado:
-        filtro = df_resultados[df_resultados[MAPA["sku"]].astype(str).str.upper() == sku_buscado.upper()]
+    # FORMULARIO DE BÚSQUEDA (Evita recargas accidentales)
+    with st.form("search_form"):
+        col_input, col_btn = st.columns([4, 1])
+        with col_input:
+            sku_input = st.text_input("Ingresa un código SKU para ver su detalle (Ej: H-2):", value=st.session_state.sku_buscado)
+        with col_btn:
+            st.markdown("<br>", unsafe_allow_html=True) # Espaciado
+            submit_search = st.form_submit_button("🔍 Buscar Planos")
+
+    if submit_search:
+        st.session_state.sku_buscado = sku_input
+
+    # SI HAY UNA BÚSQUEDA ACTIVA EN MEMORIA, DIBUJAR TODO:
+    if st.session_state.sku_buscado:
+        filtro = df_resultados[df_resultados[MAPA["sku"]].astype(str).str.upper() == st.session_state.sku_buscado.upper()]
         
         if not filtro.empty:
             fila = filtro.iloc[0]
             m = calcular_metricas_dinamicas(fila, MAPA, modo)
             
-            # --- TARJETA DE ESTADO ---
-            st.info(f"**SKU:** {sku_buscado.upper()} | **Estado:** {m['Estado']} | **Formato:** {fila[MAPA['formato']]}")
+            st.info(f"**SKU:** {st.session_state.sku_buscado.upper()} | **Estado:** {m['Estado']} | **Formato:** {fila[MAPA['formato']]}")
             
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("Unidades por Pallet", f"{m['Capacidad_Usada']} u.")
-            c2.metric("Pallets Requeridos", m['Pallets'])
-            c3.metric("Último Pallet", f"{m['Ocupacion_Ultimo']:.1f}%")
-            c4.metric("Peso Estimado", f"{m['Peso_Pallet']:.1f} kg")
+            # --- LAYOUT ESTILO COLAB (Datos a la izquierda, Dibujos a la derecha) ---
+            col_izq, col_der = st.columns([1, 3])
             
-            st.markdown("---")
-            
-            # --- RENDERIZADO 2D HTML/CSS ---
-            st.markdown("### 📐 Vistas 2D (Pallet Base)")
-            col_planta, col_alzado = st.columns(2)
-            
-            with col_planta:
-                st.markdown("<h5 style='text-align:center;'>Vista Superior (Planta)</h5>", unsafe_allow_html=True)
-                components.html(css_styles + html_vista_superior(fila, MAPA), height=350)
+            with col_izq:
+                st.markdown("### 📋 Datos Base")
+                st.write(f"**Largo:** {fmt(a_float(valor_col(fila, 'largo', MAPA)))} cm")
+                st.write(f"**Ancho:** {fmt(a_float(valor_col(fila, 'ancho', MAPA)))} cm")
+                st.write(f"**Alto:** {fmt(a_float(valor_col(fila, 'alto', MAPA)))} cm")
+                st.write(f"**Peso:** {fmt(a_float(valor_col(fila, 'peso', MAPA)), 2)} kg")
                 
-            with col_alzado:
-                st.markdown("<h5 style='text-align:center;'>Vista Lateral (Alzado)</h5>", unsafe_allow_html=True)
-                components.html(css_styles + html_vista_lateral(fila, MAPA, m['Capacidad_Usada']), height=350)
-            
-            # --- RENDERIZADO 3D PLOTLY ---
-            st.markdown("### 🧊 Simulador 3D Interactvo")
-            if st.checkbox("Generar y Mostrar Modelo 3D (Toma unos segundos)"):
-                with st.spinner("Renderizando motor físico 3D..."):
-                    fig = renderizar_3d_plotly(fila, MAPA, cap_usada=m['Capacidad_Usada'])
-                    st.plotly_chart(fig, use_container_width=True)
+                st.markdown("### ⚙️ Resultados")
+                st.write(f"**Excel (Manual):** {fmt(m['Cap_Excel'], 0)} u")
+                st.write(f"**Óptimo Física:** {fmt(m['Cap_Optima'], 0)} u")
+                st.write(f"**Pallets Requeridos:** {m['Pallets']}")
+                st.write(f"**Últ. Pallet:** {m['Ocupacion_Ultimo']:.1f}%")
 
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                # EL CHECKBOX AHORA FUNCIONA PERFECTO GRACIAS AL SESSION_STATE
+                st.session_state.mostrar_3d = st.toggle("🧊 Activar Motor 3D", value=st.session_state.mostrar_3d)
+
+            with col_der:
+                # FILA 1: PALLET BASE
+                st.markdown(f"#### 📦 PALLET BASE ({m['Capacidad_Usada']} UNIDADES)")
+                c_pb1, c_pb2, c_pb3 = st.columns(3)
+                with c_pb1:
+                    st.caption("PLANO PLANTA (N1)")
+                    components.html(css_styles + html_vista_superior(fila, MAPA), height=300)
+                with c_pb2:
+                    st.caption("PLANO ALZADO")
+                    components.html(css_styles + html_vista_lateral(fila, MAPA, m['Capacidad_Usada']), height=300)
+                with c_pb3:
+                    st.caption("RENDER 3D")
+                    if st.session_state.mostrar_3d:
+                        st.plotly_chart(renderizar_3d_plotly(fila, MAPA, cap_usada=m['Capacidad_Usada']), use_container_width=True)
+                    else:
+                        st.info("Activa el interruptor 3D a la izquierda.")
+
+                st.markdown("---")
+                
+                # FILA 2: PALLET SOBRANTE
+                st.markdown(f"#### 🧩 ÚLTIMO PALLET ({m['Unidades_Ultimo']} UNIDADES | {m['Ocupacion_Ultimo']:.1f}%)")
+                c_ps1, c_ps2, c_ps3 = st.columns(3)
+                with c_ps1:
+                    st.caption("PLANO PLANTA SOBRANTE")
+                    components.html(css_styles + html_vista_superior(fila, MAPA, cantidad_unidades=m['Unidades_Ultimo']), height=300)
+                with c_ps2:
+                    st.caption("PLANO ALZADO SOBRANTE")
+                    components.html(css_styles + html_vista_lateral(fila, MAPA, m['Capacidad_Usada'], total_unidades=m['Unidades_Ultimo']), height=300)
+                with c_ps3:
+                    st.caption("RENDER 3D SOBRANTE")
+                    if st.session_state.mostrar_3d:
+                        st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada'], total_unidades=m['Unidades_Ultimo']), use_container_width=True)
+                    else:
+                        st.info("Activa el interruptor 3D a la izquierda.")
         else:
             st.error("❌ SKU no encontrado en la base de datos.")
-
-    st.markdown("---")
-    st.write("Si necesitas descargar la tabla completa, utiliza el menú principal de Streamlit arriba a la derecha.")
