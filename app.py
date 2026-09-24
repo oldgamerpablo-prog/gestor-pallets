@@ -52,49 +52,54 @@ css_styles = """
 </style>
 """
 
-# Estilos sobrios y elegantes para la portada
-sobrio_styles = """
+# Estilos visuales refinados con color y equilibrio
+color_styles = """
 <style>
-    .hero-container-sobrio {
-        background: #0f172a;
-        border-radius: 12px;
-        padding: 55px 30px;
+    .hero-container-color {
+        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 50%, #0369a1 100%);
+        border-radius: 16px;
+        padding: 50px 30px;
         text-align: center;
-        box-shadow: 0 10px 25px rgba(15, 23, 42, 0.15);
+        box-shadow: 0 12px 30px rgba(15, 23, 42, 0.25);
         margin-bottom: 35px;
     }
-    .hero-title-sobrio {
-        font-size: 3.5rem;
+    .hero-title-color {
+        font-size: 3.6rem;
         font-weight: 900;
         color: #ffffff;
         letter-spacing: -1px;
-        margin-bottom: 12px;
+        margin-bottom: 14px;
+        text-align: center;
     }
-    .hero-subtitle-sobrio {
-        color: #94a3b8;
-        font-size: 1.2rem;
+    .hero-subtitle-color {
+        color: #e2e8f0;
+        font-size: 1.25rem;
         font-weight: 400;
-        max-width: 800px;
+        max-width: 850px;
         margin: 0 auto;
-        line-height: 1.5;
+        line-height: 1.6;
+        text-align: center;
     }
-    .sobrio-card {
+    .color-card {
         background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 12px;
-        padding: 30px;
+        border-radius: 14px;
+        padding: 28px;
         height: 230px;
         display: flex;
         flex-direction: column;
         justify-content: space-between;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
-        transition: all 0.25s ease;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+        transition: all 0.3s ease;
         margin-bottom: 15px;
+        border-top: 5px solid #2563eb;
     }
-    .sobrio-card:hover {
-        border-color: #0f172a;
-        box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
-        transform: translateY(-3px);
+    .color-card-green { border-top-color: #059669; }
+    .color-card-amber { border-top-color: #d97706; }
+    .color-card-rose { border-top-color: #e11d48; }
+
+    .color-card:hover {
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+        transform: translateY(-4px);
     }
     .card-icon-header {
         display: flex;
@@ -102,24 +107,26 @@ sobrio_styles = """
         justify-content: space-between;
     }
     .card-icon {
-        font-size: 2rem;
+        font-size: 2.2rem;
     }
-    .card-tag-sobrio {
+    .card-tag-color {
         font-size: 0.75rem;
-        font-weight: 700;
-        padding: 4px 10px;
-        border-radius: 6px;
+        font-weight: 800;
+        padding: 4px 12px;
+        border-radius: 20px;
         letter-spacing: 0.5px;
     }
-    .tag-active-sobrio { background: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; }
-    .tag-soon-sobrio { background: #fafafa; color: #94a3b8; border: 1px solid #e2e8f0; }
-    .sobrio-card-title {
+    .tag-blue { background: #dbeafe; color: #1e40af; }
+    .tag-green { background: #d1fae5; color: #065f46; }
+    .tag-soon { background: #f1f5f9; color: #64748b; }
+
+    .color-card-title {
         color: #0f172a;
         font-size: 1.35rem;
         font-weight: 800;
         margin: 12px 0 6px 0;
     }
-    .sobrio-card-desc {
+    .color-card-desc {
         color: #475569;
         font-size: 0.95rem;
         line-height: 1.5;
@@ -557,31 +564,31 @@ def cambiar_menu(pagina):
     st.session_state.menu_seleccion = pagina
 
 def mostrar_portada():
-    st.markdown(sobrio_styles, unsafe_allow_html=True)
+    st.markdown(color_styles, unsafe_allow_html=True)
     
-    # HERO BANNER LIMPIO Y SOBRIO
+    # HERO BANNER EQUILIBRADO Y CENTRADO
     st.markdown("""
-    <div class="hero-container-sobrio">
-        <div class="hero-title-sobrio">WMS Analytics Hub</div>
-        <p class="hero-subtitle-sobrio">Plataforma integral de ingeniería logística para la optimización de almacenamiento, cubicación geométrica y diseño avanzado de layout de bodegas.</p>
+    <div class="hero-container-color">
+        <div class="hero-title-color">WMS Analytics Hub</div>
+        <p class="hero-subtitle-color">Plataforma integral de ingeniería logística para la optimización de almacenamiento, cubicación geométrica y diseño avanzado de layout de bodegas.</p>
     </div>
     """, unsafe_allow_html=True)
 
-    # MATRIZ 2X2 DE TARJETAS LIMPIAS Y PROFESIONALES
+    # MATRIZ 2X2 CON DETALLES DE COLOR
     st.markdown("<h3 style='color:#0f172a; font-weight:800; margin-bottom: 20px;'>MÓDULOS DE CONTROL</h3>", unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown("""
-        <div class="sobrio-card">
+        <div class="color-card">
             <div>
                 <div class="card-icon-header">
                     <span class="card-icon">📦</span>
-                    <span class="card-tag-sobrio tag-active-sobrio">DISPONIBLE</span>
+                    <span class="card-tag-color tag-blue">DISPONIBLE</span>
                 </div>
-                <div class="sobrio-card-title">Cubicadora de Pallets</div>
-                <p class="sobrio-card-desc">Cálculo algorítmico de volumen, estiba optimizada de productos y previsualización gráfica 2D/3D en tiempo real.</p>
+                <div class="color-card-title">Cubicadora de Pallets</div>
+                <p class="color-card-desc">Cálculo algorítmico de volumen, estiba optimizada de productos y previsualización gráfica 2D/3D en tiempo real.</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -590,14 +597,14 @@ def mostrar_portada():
 
     with col2:
         st.markdown("""
-        <div class="sobrio-card">
+        <div class="color-card color-card-green">
             <div>
                 <div class="card-icon-header">
                     <span class="card-icon">🏗️</span>
-                    <span class="card-tag-sobrio tag-active-sobrio">DISPONIBLE</span>
+                    <span class="card-tag-color tag-green">DISPONIBLE</span>
                 </div>
-                <div class="sobrio-card-title">Layout de Bodega</div>
-                <p class="sobrio-card-desc">Diseñador espacial de Centro de Distribución, optimización de flujos de tránsito y Gemelo Digital 3D interactivo.</p>
+                <div class="color-card-title">Layout de Bodega</div>
+                <p class="color-card-desc">Diseñador espacial de Centro de Distribución, optimización de flujos de tránsito y Gemelo Digital 3D interactivo.</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -608,14 +615,14 @@ def mostrar_portada():
 
     with col3:
         st.markdown("""
-        <div class="sobrio-card" style="opacity: 0.75;">
+        <div class="color-card color-card-amber" style="opacity: 0.85;">
             <div>
                 <div class="card-icon-header">
                     <span class="card-icon">📥</span>
-                    <span class="card-tag-sobrio tag-soon-sobrio">EN DESARROLLO</span>
+                    <span class="card-tag-color tag-soon">EN DESARROLLO</span>
                 </div>
-                <div class="sobrio-card-title">Entrada de Mercadería (Inbound)</div>
-                <p class="sobrio-card-desc">Módulo táctico para la gestión inteligente de andenes, asignación de recepción y priorización de descarga.</p>
+                <div class="color-card-title">Entrada de Mercadería (Inbound)</div>
+                <p class="color-card-desc">Módulo táctico para la gestión inteligente de andenes, asignación de recepción y priorización de descarga.</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -623,14 +630,14 @@ def mostrar_portada():
 
     with col4:
         st.markdown("""
-        <div class="sobrio-card" style="opacity: 0.75;">
+        <div class="color-card color-card-rose" style="opacity: 0.85;">
             <div>
                 <div class="card-icon-header">
                     <span class="card-icon">📤</span>
-                    <span class="card-tag-sobrio tag-soon-sobrio">EN DESARROLLO</span>
+                    <span class="card-tag-color tag-soon">EN DESARROLLO</span>
                 </div>
-                <div class="sobrio-card-title">Salida de Mercadería (Outbound)</div>
-                <p class="sobrio-card-desc">Planificación de despacho, consolidación de pedidos por ruta y cubicaje avanzado de camiones de carga.</p>
+                <div class="color-card-title">Salida de Mercadería (Outbound)</div>
+                <p class="color-card-desc">Planificación de despacho, consolidación de pedidos por ruta y cubicaje avanzado de camiones de carga.</p>
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -856,7 +863,7 @@ st.session_state.menu_seleccion = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v4.2 • Professional Clean Edition")
+st.sidebar.caption("WMS Analytics Hub v4.3 • Balanced Tech")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
