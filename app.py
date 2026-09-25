@@ -27,19 +27,27 @@ if "df_original" not in st.session_state: st.session_state.df_original = None
 if "df_resultados" not in st.session_state: st.session_state.df_resultados = None
 if "mapa_columnas" not in st.session_state: st.session_state.mapa_columnas = None
 
-# Memoria Layout
+# Memoria Layout (Coincidiendo exacto con Colab)
 parametros_layout = {
-    'l_bod': 40.0, 'a_bod': 50.0, 'alt_bod': 7.0, 'cant_pilares_x': 4, 'cant_pilares_y': 1,
-    'dist_pilares_x': 20.0, 'dist_pilares_y': 15.0, 'ofi_pos_x': 0.0, 'ofi_pos_y': 0.0,
-    'ofi_largo': 10.0, 'ofi_ancho': 5.0, 'ofi_alto': 3.5, 'pallets_viga': 2, 'peso_max_pallet': 2000.0,
+    'l_bod': 50.0, 'a_bod': 40.0, 'alt_bod': 7.0,
+    'cant_pilares_x': 4, 'cant_pilares_y': 1, 'dist_pilares_x': 20.0, 'dist_pilares_y': 15.0,
+    'ofi_pos_x': 0.0, 'ofi_pos_y': 0.0, 'ofi_largo': 10.0, 'ofi_ancho': 5.0, 'ofi_alto': 3.5,
+    'pallets_viga': 2, 'peso_max_pallet': 2000.0,
     'tipo_flujo': 'Flujo en I (Línea Recta)', 'ancho_porton': 6.0, 'orientacion_rack': 'Horizontal (X)',
-    'pasillo': 3.0, 'cant_pas_trans': 0, 'ancho_pas_trans': 3.0, 'alt_grua': 10.5, 'peso_max_grua': 1500.0,
-    'fuente_datos': 'Data Original', 'filtro_sublayout': 'TODOS'
+    'pasillo': 3.0, 'cant_pas_trans': 0, 'ancho_pas_trans': 3.0,
+    'alt_grua': 10.5, 'peso_max_grua': 1500.0,
+    'cant_ptas_norte': 0, 'w_ptas_norte': 6.0,
+    'cant_ptas_sur': 0, 'w_ptas_sur': 6.0,
+    'cant_ptas_este': 0, 'w_ptas_este': 6.0,
+    'cant_ptas_oeste': 0, 'w_ptas_oeste': 6.0,
+    'fuente_datos': 'Data Original', 'filtro_sublayout': 'TODOS',
+    'chk_a': True, 'chk_b': True, 'chk_c': True
 }
 for k, v in parametros_layout.items():
     if k not in st.session_state: st.session_state[k] = v
 
 if "layout_generado" not in st.session_state: st.session_state.layout_generado = False
+if "res_layout_actual" not in st.session_state: st.session_state.res_layout_actual = None
 if "mostrar_3d_layout" not in st.session_state: st.session_state.mostrar_3d_layout = False
 if "kpi_layout_capacidad" not in st.session_state: st.session_state.kpi_layout_capacidad = 0
 if "kpi_layout_ubicados" not in st.session_state: st.session_state.kpi_layout_ubicados = 0
@@ -132,7 +140,6 @@ def procesar_datos(df_original):
     mapa["unidades_pallet"] = encontrar_columna(cols, ["unidades", "pallet"])
     mapa["altura_total"] = encontrar_columna(cols, ["altura", "total", "pallet"]) or encontrar_columna(cols, ["peso"], ["total", "pallet"]) or encontrar_columna(cols, ["altura", "paletizada"])
     
-    # MAPAS ABC/XYZ
     mapa["abc"] = encontrar_columna(cols, ["abc"], ["xyz"])
     mapa["xyz"] = encontrar_columna(cols, ["xyz"], ["abc"])
     mapa["abc_xyz"] = encontrar_columna(cols, ["abc", "xyz"])
@@ -245,8 +252,7 @@ def generar_wms_excel(df_base, almacen, mapa):
     df_export = df_base.copy()
     def get_pos(s):
         s = str(s).strip().upper()
-        if s in posiciones_por_sku:
-            return ", ".join(posiciones_por_sku[s])
+        if s in posiciones_por_sku: return ", ".join(posiciones_por_sku[s])
         return "Sin Ubicar (Falta Capacidad / Demanda 0)"
     
     col_sku = mapa.get("sku", df_export.columns[0])
@@ -351,10 +357,7 @@ def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
                 cx, cy = c['x'] + c['largo']/2, c['y'] + c['ancho']/2
                 traces.append(crear_cilindro_solido_cm(cx, cy, z_base, radio - 0.2, alto - 0.5, color_carga))
                 theta = np.linspace(0, 2*np.pi, 24)
-                traces.append(go.Scatter3d(
-                    x=cx + (radio - 0.2) * np.cos(theta), y=cy + (radio - 0.2) * np.sin(theta), z=np.full(24, z_base + alto - 0.5),
-                    mode='lines', line=dict(color='#1e3a8a', width=3), showlegend=False, hoverinfo='none'
-                ))
+                traces.append(go.Scatter3d(x=cx + (radio - 0.2) * np.cos(theta), y=cy + (radio - 0.2) * np.sin(theta), z=np.full(24, z_base + alto - 0.5), mode='lines', line=dict(color='#1e3a8a', width=3), showlegend=False, hoverinfo='none'))
             else:
                 gap = 0.5
                 x_c, y_c = c['x'] + gap/2, c['y'] + gap/2
@@ -411,6 +414,7 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     
     for f in range(filas):
         num_pasillo = f + 1
+        letra_pasillo = chr(64 + num_pasillo) if num_pasillo <= 26 else f"P{num_pasillo}"
         y_r1, y_r2 = (f * ancho_bloque) + 2.0, (f * ancho_bloque) + 2.0 + pp_d
         for s in range(num_secciones):
             x_inicio = 2.0 + s * (modulos_por_seccion * l_modulo + a_ptrans)
@@ -436,16 +440,15 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
                             z_piso = 0 if n == 0 else (n * alt_nivel_viga)
                             for p_idx in range(pal_v):
                                 x_pal = x_pos + t_marco + holgura_lateral + (p_idx * (ap_w + holgura_lateral))
-                                id_pos = f"P{num_pasillo}-{num_modulo:02d}-{n+1}{lado}-{p_idx+1}"
+                                id_pos = f"{letra_pasillo}-{num_modulo:02d}-{n+1}{lado}"
                                 almacen.append({
-                                    'id_posicion': id_pos, 'pasillo': num_pasillo, 'lado': lado, 'modulo': num_modulo, 'nivel': n+1, 'slot': p_idx+1,
+                                    'id_posicion': id_pos, 'letra_pasillo': letra_pasillo, 'pasillo': num_pasillo, 'lado': lado, 'modulo': num_modulo, 'nivel': n+1, 'slot': p_idx+1,
                                     'x': x_pos, 'y': y_rack, 'x_pal': x_pal, 'z': z_piso, 'ocupado': False, 'sku': None, 'alt_p': 0
                                 })
 
-    almacen.sort(key=lambda x: (x['pasillo'], x['nivel'], x['x'], x['y']))
+    almacen.sort(key=lambda x: (x['letra_pasillo'], x['nivel'], x['x'], x['y']))
     resumen_ubicacion = []
     
-    # Asignación de Pallets con Restricción de Peso de Grúa
     for _, row in df_activa.iterrows():
         sku, cant = str(row['SKU']).strip().upper(), int(row['Cantidad_Pallets'])
         alto_real_sku = float(row['Alto_m']) if 'Alto_m' in row else ap_h
@@ -456,7 +459,6 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
         for slot in almacen:
             if ubicados >= cant: break
             if not slot['ocupado']:
-                # Restricción: Si pesa más que la grúa, solo puede ir a nivel 1
                 if forzar_nivel_1 and slot['nivel'] > 1:
                     continue
                 slot.update({'ocupado': True, 'sku': sku, 'alt_p': alto_real_sku})
@@ -561,31 +563,6 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas)
         margin=dict(r=0, l=0, b=0, t=80), height=750, paper_bgcolor='white'
     )
     return fig_3d
-
-def generar_wms_excel(df_base, almacen, mapa):
-    posiciones_por_sku = {}
-    for slot in almacen:
-        if slot['ocupado']:
-            sku = str(slot['sku']).upper()
-            if sku not in posiciones_por_sku:
-                posiciones_por_sku[sku] = []
-            posiciones_por_sku[sku].append(slot['id_posicion'])
-            
-    df_export = df_base.copy()
-    def get_pos(s):
-        s = str(s).strip().upper()
-        if s in posiciones_por_sku:
-            return ", ".join(posiciones_por_sku[s])
-        return "Sin Ubicar (Falta Capacidad / Demanda 0)"
-    
-    col_sku = mapa.get("sku", df_export.columns[0])
-    df_export['Posiciones_Layout_WMS'] = df_export[col_sku].apply(get_pos)
-    
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df_export.to_excel(writer, sheet_name="Reporte_WMS", index=False)
-    output.seek(0)
-    return output
 
 # ============================================================
 # 5. MÓDULOS DE PÁGINAS (UI)
@@ -794,77 +771,189 @@ def mostrar_layout():
     df_layout_orig['Cantidad_Pallets'] = np.ceil(stock_op / unid_pal)
     df_layout_orig['Alto_m'] = pd.to_numeric(df_orig[MAPA['altura_total']], errors='coerce').fillna(120) / 100.0
     df_layout_orig['Peso_Pallet_kg'] = [calcular_metricas_dinamicas(row, MAPA, "EXCEL")['Peso_Pallet'] for _, row in df_orig.iterrows()]
+    df_layout_orig['ABC'] = df_orig[MAPA['abc']] if MAPA.get('abc') else 'C'
+    df_layout_orig['XYZ'] = df_orig[MAPA['xyz']] if MAPA.get('xyz') else 'Z'
+    df_layout_orig['ABC_XYZ'] = df_orig[MAPA['abc_xyz']] if MAPA.get('abc_xyz') else df_layout_orig['ABC'] + df_layout_orig['XYZ']
 
     df_layout_opt['SKU'] = df_res[MAPA['sku']]
     cap_opt = pd.to_numeric(df_res['Capacidad_Optima'], errors='coerce').fillna(0).replace(0, np.nan)
     df_layout_opt['Cantidad_Pallets'] = np.ceil(stock_op / cap_opt)
     df_layout_opt['Alto_m'] = df_layout_orig['Alto_m']
     df_layout_opt['Peso_Pallet_kg'] = [calcular_metricas_dinamicas(row, MAPA, "OPTIMO")['Peso_Pallet'] for _, row in df_res.iterrows()]
+    df_layout_opt['ABC'] = df_layout_orig['ABC']
+    df_layout_opt['XYZ'] = df_layout_orig['XYZ']
+    df_layout_opt['ABC_XYZ'] = df_layout_orig['ABC_XYZ']
 
     dict_demanda = {'Data Original': df_layout_orig[df_layout_orig['Cantidad_Pallets'] > 0], 'Data Optimizada': df_layout_opt[df_layout_opt['Cantidad_Pallets'] > 0]}
 
-    with st.expander("⚙️ PANEL MASTER CD (Configuración de Bodega)", expanded=True):
+    # PANEL MASTER CD COMPLETO (Estructura de 4 Columnas exacta a Colab)
+    with st.expander("⚙️ PANEL MASTER CD (Configuración Completa de Bodega)", expanded=True):
         col_inf, col_dr, col_op, col_an = st.columns(4)
+        
         with col_inf:
-            st.markdown("<h4 style='color:#2980b9;'>🏢 Infraestructura</h4>", unsafe_allow_html=True)
+            st.markdown("<h4 style='color:#2980b9; margin-top:0;'>🏢 1. Infraestructura</h4>", unsafe_allow_html=True)
             st.session_state.l_bod = st.number_input('Largo Bodega (m):', value=st.session_state.l_bod)
             st.session_state.a_bod = st.number_input('Ancho Bodega (m):', value=st.session_state.a_bod)
             st.session_state.alt_bod = st.number_input('Alto Útil (m):', value=st.session_state.alt_bod)
-            st.session_state.cant_pilares_x = st.number_input('Pilares X:', value=st.session_state.cant_pilares_x)
+            
+            st.markdown("<b style='color:#7f8c8d; font-size:11px;'>MALLA DE PILARES</b>", unsafe_allow_html=True)
+            st.session_state.cant_pilares_x = st.number_input('Cant. Pilares X (0=Auto):', value=st.session_state.cant_pilares_x)
+            st.session_state.cant_pilares_y = st.number_input('Cant. Pilares Y (0=Auto):', value=st.session_state.cant_pilares_y)
             st.session_state.dist_pilares_x = st.number_input('Dist. Pilares X (m):', value=st.session_state.dist_pilares_x)
+            st.session_state.dist_pilares_y = st.number_input('Dist. Pilares Y (m):', value=st.session_state.dist_pilares_y)
+            
+            st.markdown("<b style='color:#7f8c8d; font-size:11px;'>🏢 ZONA DE OFICINAS</b>", unsafe_allow_html=True)
+            st.session_state.ofi_pos_x = st.number_input('Pos. Inicio X (m):', value=st.session_state.ofi_pos_x)
+            st.session_state.ofi_pos_y = st.number_input('Pos. Inicio Y (m):', value=st.session_state.ofi_pos_y)
+            st.session_state.ofi_largo = st.number_input('Largo X (m):', value=st.session_state.ofi_largo)
+            st.session_state.ofi_ancho = st.number_input('Ancho Y (m):', value=st.session_state.ofi_ancho)
+            st.session_state.ofi_alto = st.number_input('Alto Z (m):', value=st.session_state.ofi_alto)
+
         with col_dr:
-            st.markdown("<h4 style='color:#27ae60;'>📦 Estructura</h4>", unsafe_allow_html=True)
-            st.session_state.pallets_viga = st.selectbox('Config. Viga (Pallets):', [1, 2, 3], index=[1,2,3].index(st.session_state.pallets_viga))
-            st.session_state.alt_grua = st.number_input('Alt. Máx. Grúa (m):', value=st.session_state.alt_grua)
-            st.session_state.peso_max_grua = st.number_input('Cap. Peso Grúa (kg):', value=st.session_state.peso_max_grua, help="Pallets más pesados que este límite irán obligatoriamente al Nivel 1.")
+            st.markdown("<h4 style='color:#27ae60; margin-top:0;'>📦 2. Slotting y Racks</h4>", unsafe_allow_html=True)
+            
+            # Resumen de Estado Excel con Desglose ABC
+            df_fuente_curr = dict_demanda['Data Original'] if st.session_state.fuente_datos == 'Data Original' else dict_demanda['Data Optimizada']
+            tot_p_fuente = df_fuente_curr['Cantidad_Pallets'].sum()
+            cnt_a = df_fuente_curr[df_fuente_curr['ABC']=='A']['Cantidad_Pallets'].sum()
+            cnt_b = df_fuente_curr[df_fuente_curr['ABC']=='B']['Cantidad_Pallets'].sum()
+            cnt_c = df_fuente_curr[df_fuente_curr['ABC']=='C']['Cantidad_Pallets'].sum()
+
+            st.markdown(f"""
+            <div style='background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:12px; font-size:12px; font-family:monospace; margin-bottom:12px;'>
+                <b style='color:#27ae60;'>✅ REPORTE CUBICADORA OK</b><br>
+                <b>Total a Ubicar:</b> {tot_p_fuente:,.0f} Pallets<br>
+                <span style='color:#e74c3c;'>🔹 Zona A: {cnt_a:,.0f} pal</span><br>
+                <span style='color:#e67e22;'>🔹 Zona B: {cnt_b:,.0f} pal</span><br>
+                <span style='color:#3498db;'>🔹 Zona C: {cnt_c:,.0f} pal</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.markdown("<b style='color:#7f8c8d; font-size:11px;'>ESTRUCTURA RACK</b>", unsafe_allow_html=True)
+            st.session_state.pallets_viga = st.selectbox('Config. Viga:', [1, 2, 3], index=[1,2,3].index(st.session_state.pallets_viga))
+            st.session_state.peso_max_pallet = st.number_input('Peso Máx. Viga (kg):', value=st.session_state.peso_max_pallet)
+
         with col_op:
-            st.markdown("<h4 style='color:#e67e22;'>🚜 Operación</h4>", unsafe_allow_html=True)
+            st.markdown("<h4 style='color:#e67e22; margin-top:0;'>🚜 3. Operación</h4>", unsafe_allow_html=True)
+            st.markdown("<b style='color:#7f8c8d; font-size:11px;'>DISEÑO DE TRÁNSITO</b>", unsafe_allow_html=True)
             st.session_state.tipo_flujo = st.selectbox('Flujo:', ['Ninguno', 'Flujo en U', 'Flujo en I (Línea Recta)', 'Flujo en L'], index=['Ninguno', 'Flujo en U', 'Flujo en I (Línea Recta)', 'Flujo en L'].index(st.session_state.tipo_flujo))
+            st.session_state.ancho_porton = st.number_input('Ancho P. Auto (m):', value=st.session_state.ancho_porton)
             st.session_state.orientacion_rack = st.selectbox('Orientación:', ['Automática', 'Horizontal (X)', 'Vertical (Y)'], index=['Automática', 'Horizontal (X)', 'Vertical (Y)'].index(st.session_state.orientacion_rack))
             st.session_state.pasillo = st.number_input('Ancho Pasillo (m):', value=st.session_state.pasillo)
-        with col_an:
-            st.markdown("<h4 style='color:#8e44ad;'>🔍 Análisis</h4>", unsafe_allow_html=True)
-            st.session_state.fuente_datos = st.selectbox('Fuente:', ['Data Original', 'Data Optimizada'], index=['Data Original', 'Data Optimizada'].index(st.session_state.fuente_datos))
-            st.session_state.filtro_sublayout = st.text_area('✂️ Filtrar SKUs:', value=st.session_state.filtro_sublayout, height=68)
+            st.session_state.cant_pas_trans = st.number_input('Pasillos Trans.:', value=st.session_state.cant_pas_trans)
+            st.session_state.ancho_pas_trans = st.number_input('Ancho P. Trans. (m):', value=st.session_state.ancho_pas_trans)
             
-            if st.button("🏢 Generar Layout", type="primary", use_container_width=True): st.session_state.layout_generado = True
-            if st.button("🧠 IA: Optimizar Layout", use_container_width=True):
-                with st.spinner("⏳ Calculando combinaciones y restricciones físicas..."):
-                    raw = st.session_state.filtro_sublayout.strip()
-                    skus_busc = set(s.strip().upper() for s in re.split(r'[\n,\t\r;]+', raw) if s.strip())
-                    is_filt = bool(skus_busc and raw.upper() != 'TODOS')
-                    escenarios = []
-                    for f in ['Data Original', 'Data Optimizada']:
-                        df_test = dict_demanda[f][dict_demanda[f]['SKU'].astype(str).str.upper().isin(skus_busc)].copy() if is_filt else dict_demanda[f].copy()
-                        if df_test.empty: continue
+            st.markdown("<b style='color:#d35400; font-size:11px;'>RESTRICCIONES FÍSICAS</b>", unsafe_allow_html=True)
+            st.session_state.alt_grua = st.number_input('Alt. Máx. Grúa (m):', value=st.session_state.alt_grua)
+            st.session_state.peso_max_grua = st.number_input('Cap. Grúa (kg):', value=st.session_state.peso_max_grua)
+            
+            st.markdown("<b style='color:#7f8c8d; font-size:11px;'>ACCESOS EXTRA</b>", unsafe_allow_html=True)
+            c_p1, c_p2 = st.columns(2)
+            with c_p1:
+                st.session_state.cant_ptas_norte = st.number_input('Ptas Norte:', value=st.session_state.cant_ptas_norte)
+                st.session_state.cant_ptas_sur = st.number_input('Ptas Sur:', value=st.session_state.cant_ptas_sur)
+                st.session_state.cant_ptas_este = st.number_input('Ptas Este:', value=st.session_state.cant_ptas_este)
+                st.session_state.cant_ptas_oeste = st.number_input('Ptas Oeste:', value=st.session_state.cant_ptas_oeste)
+            with c_p2:
+                st.session_state.w_ptas_norte = st.number_input('Ancho N:', value=st.session_state.w_ptas_norte)
+                st.session_state.w_ptas_sur = st.number_input('Ancho S:', value=st.session_state.w_ptas_sur)
+                st.session_state.w_ptas_este = st.number_input('Ancho E:', value=st.session_state.w_ptas_este)
+                st.session_state.w_ptas_oeste = st.number_input('Ancho O:', value=st.session_state.w_ptas_oeste)
+
+        with col_an:
+            st.markdown("<h4 style='color:#8e44ad; margin-top:0;'>🔍 4. Análisis y Filtros</h4>", unsafe_allow_html=True)
+            st.session_state.fuente_datos = st.selectbox('📂 Fuente:', ['Data Original', 'Data Optimizada'], index=['Data Original', 'Data Optimizada'].index(st.session_state.fuente_datos))
+            st.session_state.filtro_sublayout = st.text_area('✂️ Filtrar SKU:', value=st.session_state.filtro_sublayout, height=50)
+            
+            st.markdown("<b style='font-size:11px; color:#34495e;'>🔠 Zonas ABC a procesar:</b>", unsafe_allow_html=True)
+            cb_a, cb_b, cb_c = st.columns(3)
+            with cb_a: st.session_state.chk_a = st.checkbox('Zona A', value=st.session_state.chk_a)
+            with cb_b: st.session_state.chk_b = st.checkbox('Zona B', value=st.session_state.chk_b)
+            with cb_c: st.session_state.chk_c = st.checkbox('Zona C', value=st.session_state.chk_c)
+
+            st.markdown("<b style='font-size:10px; color:#34495e; margin-top:5px; display:block;'>CONTROLES DE EVALUACIÓN:</b>", unsafe_allow_html=True)
+            
+            if st.button("🎯 Crear Layout (SKUs Seleccionados)", type="primary", use_container_width=True):
+                st.session_state.layout_generado = True
+                st.session_state.modo_layout_eval = 'filtro'
+                
+            if st.button("🏢 Crear Layout General", use_container_width=True):
+                st.session_state.layout_generado = True
+                st.session_state.modo_layout_eval = 'todos'
+
+            if st.button("🧠 Propuesta Espacial de Layout", use_container_width=True):
+                with st.spinner("⏳ Calculando propuesta óptima con IA..."):
+                    clases_sel = []
+                    if st.session_state.chk_a: clases_sel.append('A')
+                    if st.session_state.chk_b: clases_sel.append('B')
+                    if st.session_state.chk_c: clases_sel.append('C')
+                    
+                    df_test_base = dict_demanda[st.session_state.fuente_datos]
+                    df_test_base = df_test_base[df_test_base['ABC'].isin(clases_sel)]
+                    
+                    raw_f = st.session_state.filtro_sublayout.strip()
+                    skus_f = set(s.strip().upper() for s in re.split(r'[,\s;]+', raw_f) if s.strip())
+                    if skus_f and raw_f.upper() != 'TODOS':
+                        df_test_base = df_test_base[df_test_base['SKU'].astype(str).str.upper().isin(skus_f)]
+
+                    if not df_test_base.empty:
+                        escenarios = []
                         for o in [True, False]:
                             for v in [2, 3]:
-                                res = motor_calculo_layout(df_test, o, v, st.session_state)
-                                res.update({'fuente': f, 'is_vertical': o, 'pal_v': v})
-                                escenarios.append(res)
-                    if escenarios:
-                        mejor = max(escenarios, key=lambda x: x['diferencia'])
-                        st.session_state.fuente_datos, st.session_state.orientacion_rack, st.session_state.pallets_viga = mejor['fuente'], 'Vertical (Y)' if mejor['is_vertical'] else 'Horizontal (X)', mejor['pal_v']
-                        st.session_state.layout_generado = True
-                        st.success(f"🧠 IA Aplicada: {mejor['fuente']}, {'Vertical' if mejor['is_vertical'] else 'Horizontal'}, {mejor['pal_v']} por viga.")
-                        st.rerun()
+                                res_ia = motor_calculo_layout(df_test_base, o, v, st.session_state)
+                                res_ia.update({'is_vertical': o, 'pal_v': v})
+                                escenarios.append(res_ia)
+                        if escenarios:
+                            mejor = max(escenarios, key=lambda x: x['diferencia'])
+                            st.session_state.orientacion_rack = 'Vertical (Y)' if mejor['is_vertical'] else 'Horizontal (X)'
+                            st.session_state.pallets_viga = mejor['pal_v']
+                            st.session_state.layout_generado = True
+                            st.session_state.modo_layout_eval = 'todos'
+                            st.success(f"🧠 IA Aplicada: Orientación {'Vertical' if mejor['is_vertical'] else 'Horizontal'}, {mejor['pal_v']} vigas.")
+                            st.rerun()
 
-    if st.session_state.layout_generado:
+            # Caja de Resultado/Evaluación en la misma columna
+            if st.session_state.layout_generado:
+                clases_sel = []
+                if st.session_state.chk_a: clases_sel.append('A')
+                if st.session_state.chk_b: clases_sel.append('B')
+                if st.session_state.chk_c: clases_sel.append('C')
+                
+                df_activa = dict_demanda[st.session_state.fuente_datos]
+                df_activa = df_activa[df_activa['ABC'].isin(clases_sel)]
+                
+                raw = st.session_state.filtro_sublayout.strip()
+                if getattr(st.session_state, 'modo_layout_eval', 'todos') == 'filtro':
+                    skus_buscados = set(s.strip().upper() for s in re.split(r'[,\s;]+', raw) if s.strip())
+                    if skus_buscados and raw.upper() != 'TODOS':
+                        df_activa = df_activa[df_activa['SKU'].astype(str).str.upper().isin(skus_buscados)]
+
+                is_vert = ('Vertical' in st.session_state.orientacion_rack) if 'Automática' not in st.session_state.orientacion_rack else (st.session_state.tipo_flujo in ['Flujo en U', 'Flujo en I (Línea Recta)'])
+                res_box = motor_calculo_layout(df_activa, is_vert, st.session_state.pallets_viga, st.session_state)
+                st.session_state.res_layout_actual = res_box
+
+                dif = res_box['diferencia']
+                s_bg, s_color = ("#ecfdf5", "#065f46") if dif >= 0 else ("#fef2f2", "#991b1b")
+                msg_txt = f"✔️ ¡ÉXITO! Caben todos y sobran {dif:,}." if dif >= 0 else f"⚠️ ¡ALERTA! Te faltan {abs(dif):,} posiciones."
+
+                st.markdown(f"""
+                <div style="margin-top:10px; border:1px solid {s_color}; border-radius:6px; background:{s_bg}; padding:8px; font-family:sans-serif;">
+                    <div style="color:#2c3e50; font-weight:900; font-size:11px; margin-bottom:2px; text-align:center;">📊 EVALUACIÓN | Zonas: {','.join(clases_sel)}</div>
+                    <div style="color:{s_color}; font-weight:bold; font-size:11px; margin-bottom:5px; text-align:center;">{msg_txt}</div>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:2px; font-size:10px; color:#334155;">
+                        <div><b>Racks Planta:</b></div><div style="text-align:right;">{res_box['modulos']:,} mód.</div>
+                        <div><b>Niveles Alto:</b></div><div style="text-align:right;">{res_box['niveles']} niv.</div>
+                        <div style="border-top:1px solid #cbd5e1; padding-top:2px;"><b>Capacidad Racks:</b></div><div style="border-top:1px solid #cbd5e1; padding-top:2px; text-align:right; font-weight:bold;">{res_box['capacidad']:,} pal</div>
+                        <div><b>Demanda Eval:</b></div><div style="text-align:right; font-weight:bold;">{res_box['demanda']:,} pal</div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    # RENDERIZADO VISUAL DEL LAYOUT 2D/3D
+    if st.session_state.layout_generado and st.session_state.res_layout_actual is not None:
         st.markdown("---")
-        raw = st.session_state.filtro_sublayout.strip()
-        skus_buscados = set(s.strip().upper() for s in re.split(r'[\n,\t\r;]+', raw) if s.strip())
-        is_filtrado = bool(skus_buscados and raw.upper() != 'TODOS')
+        res = st.session_state.res_layout_actual
         
-        df_activa = dict_demanda[st.session_state.fuente_datos]
-        if is_filtrado: df_activa = df_activa[df_activa['SKU'].astype(str).str.upper().isin(skus_buscados)].copy()
-        
-        is_vert = ('Vertical' in st.session_state.orientacion_rack) if 'Automática' not in st.session_state.orientacion_rack else (st.session_state.tipo_flujo in ['Flujo en U', 'Flujo en I (Línea Recta)'])
-        res = motor_calculo_layout(df_activa, is_vert, st.session_state.pallets_viga, st.session_state)
-
-        dif = res['diferencia']
-        if dif >= 0: st.success(f"✔️ ¡ÉXITO! Caben todos y sobran {dif:,} posiciones. (Capacidad: {res['capacidad']:,} | Demanda: {res['demanda']:,})")
-        else: st.error(f"⚠️ ¡ALERTA! Faltan {abs(dif):,} posiciones. (Capacidad: {res['capacidad']:,} | Demanda: {res['demanda']:,})")
-
         # BOTÓN EXPORTAR WMS EXCEL
         wms_excel = generar_wms_excel(df_orig if st.session_state.fuente_datos == 'Data Original' else df_res, res['almacen'], MAPA)
         st.download_button("💾 Exportar Ubicaciones WMS", data=wms_excel, file_name="WMS_Ubicaciones_Bodega.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
@@ -879,13 +968,13 @@ def mostrar_layout():
         
         for mod in res['modulos_list']:
             x_pos, y_rack = mod['x'], mod['y']
-            rx0, ry0, rx1, ry1 = (y_rack, x_pos, y_rack+pp_d, x_pos+l_modulo) if is_vert else (x_pos, y_rack, x_pos+l_modulo, y_rack+pp_d)
+            rx0, ry0, rx1, ry1 = (y_rack, x_pos, y_rack+pp_d, x_pos+l_modulo) if res['is_vertical'] else (x_pos, y_rack, x_pos+l_modulo, y_rack+pp_d)
             path = f"M {rx0} {ry0} L {rx1} {ry0} L {rx1} {ry1} L {rx0} {ry1} Z"
             if mod['bloqueado']: path_block.append(path)
             else: path_free.append(path)
 
         for px, py in res['pilares_reales']:
-            rx0, ry0, rx1, ry1 = (py-0.25, px-0.25, py+0.25, px+0.25) if is_vert else (px-0.25, py-0.25, px+0.25, py+0.25)
+            rx0, ry0, rx1, ry1 = (py-0.25, px-0.25, py+0.25, px+0.25) if res['is_vertical'] else (px-0.25, py-0.25, px+0.25, py+0.25)
             path_pil.append(f"M {rx0} {ry0} L {rx1} {ry0} L {rx1} {ry1} L {rx0} {ry1} Z")
 
         if path_free: fig_2d.add_shape(type="path", path=" ".join(path_free), fillcolor="#3498db", line=dict(color="#2980b9", width=1))
@@ -918,7 +1007,9 @@ def mostrar_layout():
         
         if mostrar_3d_layout:
             with st.spinner("Construyendo Mallas 3D de la Bodega..."):
-                fig_3d = generar_layout_3d(res, l_m, a_m, st.session_state.alt_bod, is_vert, skus_buscados, puertas)
+                raw_sub = st.session_state.filtro_sublayout.strip()
+                skus_b = set(s.strip().upper() for s in re.split(r'[,\s;]+', raw_sub) if s.strip()) if raw_sub.upper() != 'TODOS' else set()
+                fig_3d = generar_layout_3d(res, l_m, a_m, st.session_state.alt_bod, res['is_vertical'], skus_b, puertas)
                 st.plotly_chart(fig_3d, use_container_width=True)
 
 def mostrar_analytics():
@@ -1029,7 +1120,7 @@ st.session_state.menu_seleccion = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v6.0 • Enterprise Edition")
+st.sidebar.caption("WMS Analytics Hub v6.1 • Colab Parity Edition")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
