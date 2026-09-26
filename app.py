@@ -23,6 +23,7 @@ if "menu_seleccion" not in st.session_state:
 
 # Memoria Cubicadora
 if "skus_activos" not in st.session_state: st.session_state.skus_activos = []
+if "skus_invalidos" not in st.session_state: st.session_state.skus_invalidos = []
 if "df_original" not in st.session_state: st.session_state.df_original = None
 if "df_resultados" not in st.session_state: st.session_state.df_resultados = None
 if "mapa_columnas" not in st.session_state: st.session_state.mapa_columnas = None
@@ -34,12 +35,14 @@ parametros_layout = {
     'ofi_largo': 10.0, 'ofi_ancho': 5.0, 'ofi_alto': 3.5, 'pallets_viga': 2, 'peso_max_pallet': 2000.0,
     'tipo_flujo': 'Flujo en I (Línea Recta)', 'ancho_porton': 6.0, 'orientacion_rack': 'Horizontal (X)',
     'pasillo': 3.0, 'cant_pas_trans': 0, 'ancho_pas_trans': 3.0, 'alt_grua': 10.5, 'peso_max_grua': 1500.0,
-    'fuente_datos': 'Data Original', 'filtro_sublayout': 'TODOS'
+    'fuente_datos': 'Data Original', 'filtro_sublayout': 'TODOS',
+    'chk_a': True, 'chk_b': True, 'chk_c': True
 }
 for k, v in parametros_layout.items():
     if k not in st.session_state: st.session_state[k] = v
 
 if "layout_generado" not in st.session_state: st.session_state.layout_generado = False
+if "res_layout_actual" not in st.session_state: st.session_state.res_layout_actual = None
 if "mostrar_3d_layout" not in st.session_state: st.session_state.mostrar_3d_layout = False
 if "kpi_layout_capacidad" not in st.session_state: st.session_state.kpi_layout_capacidad = 0
 if "kpi_layout_ubicados" not in st.session_state: st.session_state.kpi_layout_ubicados = 0
@@ -132,7 +135,6 @@ def procesar_datos(df_original):
     mapa["unidades_pallet"] = encontrar_columna(cols, ["unidades", "pallet"])
     mapa["altura_total"] = encontrar_columna(cols, ["altura", "total", "pallet"]) or encontrar_columna(cols, ["peso"], ["total", "pallet"]) or encontrar_columna(cols, ["altura", "paletizada"])
     
-    # MAPAS ABC/XYZ
     mapa["abc"] = encontrar_columna(cols, ["abc"], ["xyz"])
     mapa["xyz"] = encontrar_columna(cols, ["xyz"], ["abc"])
     mapa["abc_xyz"] = encontrar_columna(cols, ["abc", "xyz"])
@@ -228,7 +230,7 @@ def generar_excel_descarga(df_original, df_resultados, mapa):
     df_sheet1 = pd.DataFrame(comparativo_rows)
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df_sheet1.to_excel(writer, sheet_name="1_Analisis_Comparativo", index=False)
-        df_original.copy().to_excel(writer, sheet_name="2_Data_Original", index=False)
+        df_original.loc[df_resultados.index].copy().to_excel(writer, sheet_name="2_Data_Original", index=False)
         df_resultados.to_excel(writer, sheet_name="3_Data_Optimizada", index=False)
     output.seek(0)
     return output
@@ -245,8 +247,7 @@ def generar_wms_excel(df_base, almacen, mapa):
     df_export = df_base.copy()
     def get_pos(s):
         s = str(s).strip().upper()
-        if s in posiciones_por_sku:
-            return ", ".join(posiciones_por_sku[s])
+        if s in posiciones_por_sku: return ", ".join(posiciones_por_sku[s])
         return "Sin Ubicar (Falta Capacidad / Demanda 0)"
     
     col_sku = mapa.get("sku", df_export.columns[0])
@@ -443,6 +444,7 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     almacen.sort(key=lambda x: (x['letra_pasillo'], x['nivel'], x['x'], x['y']))
     resumen_ubicacion = []
     
+    # Asignación de Pallets con Restricción de Peso de Grúa
     for _, row in df_activa.iterrows():
         sku, cant = str(row['SKU']).strip().upper(), int(row['Cantidad_Pallets'])
         alto_real_sku = float(row['Alto_m']) if 'Alto_m' in row else ap_h
@@ -691,46 +693,63 @@ def mostrar_cubicadora():
                     sel_xyz = st.multiselect("🔍 Filtro Demanda (XYZ):", opciones_xyz, default=opciones_xyz)
                     df_f = df_f[df_f[MAPA['xyz']].isin(sel_xyz)]
 
-        tot_p = sum([calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"] for _, row in df_f.iterrows()])
+        st.markdown("<h3 style='color:#0f172a; font-weight:800; font-size:18px; margin-top:20px;'>🔍 Buscador Masivo y Panel de Cálculo</h3>", unsafe_allow_html=True)
+        
+        lista_skus_all = df_f[MAPA["sku"]].astype(str).str.upper().unique().tolist()
+        
+        c_s1, c_s2 = st.columns(2)
+        with c_s1:
+            sel_list = st.multiselect("Seleccionar individualmente:", options=lista_skus_all, default=[s for s in st.session_state.skus_activos if s in lista_skus_all])
+        with c_s2:
+            txt_list = st.text_area("O pegar lista desde Excel (SKUs separados por espacio o saltos de línea):", height=68)
+            
+        c_btn1, c_btn2, c_tog = st.columns([1, 1, 2])
+        with c_tog:
+            mostrar_graf = st.toggle("🖼️ Generar Renders 2D/3D (Apagar para obtener resultados numéricos instantáneos)", value=False)
+        with c_btn1:
+            if st.button("🚀 Calcular Selección", type="primary", use_container_width=True):
+                extraidos = [s.strip().upper() for s in re.split(r'[,\s;\n]+', txt_list) if s.strip()]
+                combinados = list(set(sel_list + extraidos))
+                validos = [s for s in combinados if s in lista_skus_all]
+                invalidos = [s for s in combinados if s not in lista_skus_all]
+                
+                st.session_state.skus_activos = validos
+                st.session_state.skus_invalidos = invalidos
+                st.rerun()
+        with c_btn2:
+            if st.button("🧹 Limpiar Filtros", use_container_width=True):
+                st.session_state.skus_activos = []
+                st.session_state.skus_invalidos = []
+                st.rerun()
+
+        if st.session_state.get('skus_invalidos'):
+            st.warning(f"⚠️ Los siguientes SKUs no se encontraron en la base (o están filtrados por ABC/XYZ): {', '.join(st.session_state.skus_invalidos)}")
+
+        # Filtrar datos de la tabla para KPIs
+        if st.session_state.skus_activos:
+            df_kpi = df_f[df_f[MAPA['sku']].astype(str).str.upper().isin(st.session_state.skus_activos)]
+            st.success(f"✅ Mostrando métricas calculadas para {len(df_kpi)} SKUs seleccionados.")
+        else:
+            df_kpi = df_f
+            st.info("ℹ️ Mostrando métricas globales de toda la bodega. Utiliza el buscador para analizar un listado específico.")
+
+        # Calculo de KPI central basado en la seleccion
+        tot_p = sum([calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"] for _, row in df_kpi.iterrows()])
         
         col1, col2, col3 = st.columns(3)
-        col1.metric("📦 SKU Analizados", len(df_f))
-        col2.metric("🟢 SKUs con Stock", int((pd.to_numeric(df_f[MAPA["stock"]], errors="coerce").fillna(0) > 0).sum()))
+        col1.metric("📦 SKU Analizados", len(df_kpi))
+        col2.metric("🟢 SKUs con Stock", int((pd.to_numeric(df_kpi[MAPA["stock"]], errors="coerce").fillna(0) > 0).sum()))
         col3.metric("🏗️ Pallets Requeridos", f"{tot_p:,}")
 
         st.markdown("---")
-        tab_buscar, tab_descargar, tab_alertas, tab_datos = st.tabs(["🔍 Búsqueda y Planos", "📥 Descargar Reporte", "🚨 Ver Alertas", "📊 Base de Datos"])
+        tab_buscar, tab_descargar, tab_alertas, tab_datos = st.tabs(["🔍 Resultados Detallados", "📥 Descargar Reporte", "🚨 Ver Alertas", "📊 Base de Datos"])
 
         with tab_buscar:
-            lista_skus = df_f[MAPA["sku"]].astype(str).unique().tolist()
-            opcion = st.radio("Método de Visualización:", ["Elegir de la lista", "Pegar lista (Excel)", "Ver primeros 10", "Ver TODOS"], horizontal=True)
-            
-            skus_a_procesar = []
-            if opcion == "Elegir de la lista":
-                skus_a_procesar = st.multiselect("Selecciona SKUs:", options=lista_skus, default=[lista_skus[0]] if lista_skus else [])
-            elif opcion == "Pegar lista (Excel)":
-                texto_pegado = st.text_area("Pega aquí los SKUs copiados de Excel (separados por espacio, coma o salto de línea):")
-                if texto_pegado:
-                    skus_extraidos = [s.strip().upper() for s in re.split(r'[,\s;]+', texto_pegado) if s.strip()]
-                    skus_a_procesar = [s for s in skus_extraidos if s in lista_skus]
-                    skus_no_encontrados = [s for s in skus_extraidos if s not in lista_skus]
-                    if skus_no_encontrados:
-                        st.warning(f"⚠️ SKUs no encontrados en la base de datos: {', '.join(skus_no_encontrados)}")
-            elif opcion == "Ver primeros 10":
-                skus_a_procesar = lista_skus[:10]
+            if not st.session_state.skus_activos:
+                st.markdown("<div style='text-align:center; padding: 40px; color:#64748b;'><h4>Ingresa SKUs en el buscador de arriba y haz clic en 'Calcular Selección' para ver los detalles aquí.</h4></div>", unsafe_allow_html=True)
             else:
-                skus_a_procesar = lista_skus
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            mostrar_graficos = st.checkbox("🖼️ Generar planos visuales 2D/3D (Desactiva esta opción si solo necesitas revisar los datos numéricos rápidamente)", value=False)
-            
-            if st.button("🚀 Procesar SKUs", type="primary"): 
-                st.session_state.skus_activos = skus_a_procesar
-
-            if st.session_state.skus_activos:
-                st.markdown("---")
                 for sku in st.session_state.skus_activos:
-                    filtro = df_f[df_f[MAPA["sku"]].astype(str).str.upper() == str(sku).upper()]
+                    filtro = df_kpi[df_kpi[MAPA["sku"]].astype(str).str.upper() == sku]
                     if not filtro.empty:
                         fila = filtro.iloc[0]
                         m = calcular_metricas_dinamicas(fila, MAPA, modo)
@@ -739,15 +758,13 @@ def mostrar_cubicadora():
                         
                         st.info(f"**SKU:** {sku} | **Estado:** {m['Estado']} | **Formato:** {fila[MAPA['formato']]}{fam_txt}{abc_txt}")
                         
-                        # Datos rápidos (siempre visibles)
                         cd1, cd2, cd3, cd4 = st.columns(4)
                         cd1.write(f"**Dimensiones:** {fmt(a_float(valor_col(fila, 'largo', MAPA)))} x {fmt(a_float(valor_col(fila, 'ancho', MAPA)))} x {fmt(a_float(valor_col(fila, 'alto', MAPA)))} cm")
                         cd2.write(f"**Peso Unit.:** {fmt(a_float(valor_col(fila, 'peso', MAPA)), 2)} kg")
                         cd3.write(f"**Unids x Pallet:** {fmt(m['Capacidad_Usada'], 0)} u")
                         cd4.write(f"**Pallets Req:** {m['Pallets']}")
 
-                        # Gráficos opcionales
-                        if mostrar_graficos:
+                        if mostrar_graf:
                             st.markdown("<br>", unsafe_allow_html=True)
                             col_izq, col_der = st.columns([1, 3])
                             with col_izq:
@@ -767,14 +784,14 @@ def mostrar_cubicadora():
                     st.divider()
 
         with tab_descargar:
-            st.write("Genera un Excel completo con TODOS los cálculos de los SKUs.")
-            excel_data = generar_excel_descarga(st.session_state.df_original, df_f, MAPA)
+            st.write(f"Genera un Excel completo con los cálculos de los **{len(df_kpi)} SKUs** actuales.")
+            excel_data = generar_excel_descarga(st.session_state.df_original, df_kpi, MAPA)
             st.download_button("📊 Descargar Reporte Excel", data=excel_data, file_name="Reporte_Optimizacion.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         with tab_alertas:
-            alertas = [{"SKU": row[MAPA["sku"]], "Estado": calcular_metricas_dinamicas(row, MAPA, modo)["Estado"], "Pallets": calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"]} for _, row in df_f.iterrows() if "❌" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "⚠️" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "🚨" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"]]
-            if alertas: st.warning(f"Se encontraron {len(alertas)} SKUs con alertas."); st.dataframe(pd.DataFrame(alertas), use_container_width=True)
-            else: st.success("🎉 ¡Excelente! No hay alertas.")
-        with tab_datos: st.dataframe(df_f, use_container_width=True)
+            alertas = [{"SKU": row[MAPA["sku"]], "Estado": calcular_metricas_dinamicas(row, MAPA, modo)["Estado"], "Pallets": calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"]} for _, row in df_kpi.iterrows() if "❌" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "⚠️" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "🚨" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"]]
+            if alertas: st.warning(f"Se encontraron {len(alertas)} SKUs con alertas en esta selección."); st.dataframe(pd.DataFrame(alertas), use_container_width=True)
+            else: st.success("🎉 ¡Excelente! No hay alertas en tu selección.")
+        with tab_datos: st.dataframe(df_kpi, use_container_width=True)
     else: st.info("👆 Sube tu archivo Excel para comenzar.")
 
 def mostrar_layout():
@@ -1136,7 +1153,7 @@ st.session_state.menu_seleccion = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v6.2 • Optimizada")
+st.sidebar.caption("WMS Analytics Hub v6.3 • Fast Engine")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
