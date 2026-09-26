@@ -353,7 +353,7 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     pil_r = [(px * dxr, py * dyr) for px in range(1, nx + 1) for py in range(1, ny + 1)]
     v_pil = [(py, px) for px, py in pil_r] if is_vertical else pil_r
 
-    m_v, m_l, alm = 0, [], []
+    m_v, m_l, alm = 0, [] , []
     for f in range(filas):
         l_pas = chr(64 + f + 1) if f+1 <= 26 else f"P{f+1}"
         yr1, yr2 = (f * a_b) + 2.0, (f * a_b) + 2.0 + pp_d
@@ -620,22 +620,27 @@ def mostrar_cubicadora():
                         st.markdown(html_header, unsafe_allow_html=True)
                         if mostrar_graf and not MAPA.get('is_opt_report'):
                             col_izq, col_der = st.columns([1, 3])
-                            with col_izq: st.markdown(html_datos_base, unsafe_allow_html=True)
+                            with col_izq: 
+                                st.markdown(html_datos_base, unsafe_allow_html=True)
                             with col_der:
                                 st.markdown("<div style='border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 0; padding: 20px; background: #ffffff; height: 100%;'>", unsafe_allow_html=True)
-                                mostrar_3d_sku = st.toggle(f"🧊 Levantar Maqueta 3D", key=f"t_{sku}")
-                                c_pb1, c_pb2, c_pb3 = st.columns(3)
-                                with c_pb1: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#334155; margin-bottom:5px;'>PLANO PLANTA (N1)</div>", unsafe_allow_html=True); st.markdown(html_vista_superior(fila, MAPA), unsafe_allow_html=True)
-                                with c_pb2: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#334155; margin-bottom:5px;'>PLANO ALZADO</div>", unsafe_allow_html=True); st.markdown(html_vista_lateral(fila, MAPA, m['Capacidad_Usada']), unsafe_allow_html=True)
-                                with c_pb3: 
-                                    if mostrar_3d_sku: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada']), use_container_width=True, key=f"pb_{sku}")
-                                    else: st.markdown("<div style='height:200px; display:flex; align-items:center; justify-content:center; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; color:#94a3b8; font-size:11px; font-weight:bold;'>Activa el botón 'Levantar Maqueta 3D' para renderizar.</div>", unsafe_allow_html=True)
-                                st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
-                                c_ps1, c_ps2, c_ps3 = st.columns(3)
-                                with c_ps1: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#0284c7; margin-bottom:5px;'>PLANTA PALLET SOBRANTE</div>", unsafe_allow_html=True); st.markdown(html_vista_superior(fila, MAPA, m['Unidades_Sobrante']), unsafe_allow_html=True)
-                                with c_ps2: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#0284c7; margin-bottom:5px;'>ALZADO PALLET SOBRANTE</div>", unsafe_allow_html=True); st.markdown(html_vista_lateral(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Sobrante']), unsafe_allow_html=True)
-                                with c_ps3: 
-                                    if mostrar_3d_sku: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Sobrante']), use_container_width=True, key=f"ps_{sku}")
+                                es_ultimo_sku = (sku == st.session_state.skus_activos[-1])
+                                if es_ultimo_sku:
+                                    mostrar_3d_sku = st.toggle(f"🧊 Levantar Maqueta 3D", key=f"t_{sku}")
+                                    c_pb1, c_pb2, c_pb3 = st.columns(3)
+                                    with c_pb1: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#334155; margin-bottom:5px;'>PLANO PLANTA (N1)</div>", unsafe_allow_html=True); st.markdown(html_vista_superior(fila, MAPA), unsafe_allow_html=True)
+                                    with c_pb2: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#334155; margin-bottom:5px;'>PLANO ALZADO</div>", unsafe_allow_html=True); st.markdown(html_vista_lateral(fila, MAPA, m['Capacidad_Usada']), unsafe_allow_html=True)
+                                    with c_pb3: 
+                                        if mostrar_3d_sku: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada']), use_container_width=True, key=f"pb_{sku}")
+                                        else: st.markdown("<div style='height:200px; display:flex; align-items:center; justify-content:center; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; color:#94a3b8; font-size:11px; font-weight:bold;'>Activa el botón 'Levantar Maqueta 3D' para renderizar.</div>", unsafe_allow_html=True)
+                                    st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+                                    c_ps1, c_ps2, c_ps3 = st.columns(3)
+                                    with c_ps1: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#0284c7; margin-bottom:5px;'>PLANTA PALLET SOBRANTE</div>", unsafe_allow_html=True); st.markdown(html_vista_superior(fila, MAPA, m['Unidades_Sobrante']), unsafe_allow_html=True)
+                                    with c_ps2: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#0284c7; margin-bottom:5px;'>ALZADO PALLET SOBRANTE</div>", unsafe_allow_html=True); st.markdown(html_vista_lateral(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Sobrante']), unsafe_allow_html=True)
+                                    with c_ps3: 
+                                        if mostrar_3d_sku: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Sobrante']), use_container_width=True, key=f"ps_{sku}")
+                                else:
+                                    st.markdown("<div style='height:100%; display:flex; align-items:center; justify-content:center; color:#94a3b8; font-size:13px; font-weight:bold; text-align:center;'>Visualización 3D/2D omitida. Los planos completos se muestran solo para el último elemento para optimizar rendimiento.</div>", unsafe_allow_html=True)
                                 st.markdown("</div>", unsafe_allow_html=True)
                         elif mostrar_graf and MAPA.get('is_opt_report'):
                             col_izq, col_der = st.columns([1, 3])
@@ -653,23 +658,6 @@ def mostrar_cubicadora():
             else: st.success("🎉 ¡Excelente! No hay alertas.")
         with tab_datos: st.dataframe(df_f, use_container_width=True)
     else: st.info("👆 Sube tu archivo Excel para comenzar.")
-
-def preparar_df_layout(df_base, mapa, modo):
-    df_l = pd.DataFrame({'SKU': df_base[mapa['sku']]})
-    metrics = [calcular_metricas_dinamicas(row, mapa, modo) for _, row in df_base.iterrows()]
-    df_l['Cantidad_Pallets'], df_l['Peso_Pallet_kg'] = [m['Pallets'] for m in metrics], [m['Peso_Pallet'] for m in metrics]
-    df_l['Pallets_Completos_Optimo'], df_l['Unidades_Sobrante_Optimo'], df_l['Capacidad_Optima'] = [m['Pallets_Completos'] for m in metrics], [m['Unidades_Sobrante'] for m in metrics], [m['Cap_Optima'] for m in metrics]
-    
-    col_alto = mapa.get('altura_total') if mapa.get('altura_total') in df_base.columns else mapa.get('alto')
-    df_l['Alto_m'] = pd.to_numeric(df_base[col_alto], errors='coerce').fillna(120) / 100.0 if col_alto and col_alto in df_base.columns else 1.2
-    
-    abc = df_base[mapa.get('abc')].fillna('C').astype(str).str.strip().str.upper() if mapa.get('abc') and mapa.get('abc') in df_base.columns else pd.Series('C', index=df_base.index)
-    xyz = df_base[mapa.get('xyz')].fillna('Z').astype(str).str.strip().str.upper() if mapa.get('xyz') and mapa.get('xyz') in df_base.columns else pd.Series('Z', index=df_base.index)
-    df_l['ABC_XYZ'] = df_base[mapa.get('abc_xyz')].fillna(abc + xyz).astype(str).str.strip().str.upper() if mapa.get('abc_xyz') and mapa.get('abc_xyz') in df_base.columns else abc + xyz
-    df_l['ABC_XYZ'] = df_l['ABC_XYZ'].replace({'N/D': 'CZ', 'N/DN/D': 'CZ', 'NAN': 'CZ'})
-    df_l['ABC_XYZ'] = df_l['ABC_XYZ'].astype(pd.CategoricalDtype(categories=['AX','AY','AZ','BX','BY','BZ','CX','CY','CZ'], ordered=True))
-    df_l['Formato'], df_l['ABC'] = df_base[mapa.get('formato')] if mapa.get('formato') and mapa.get('formato') in df_base.columns else 'N/D', abc.replace({'N/D': 'C', 'NAN': 'C'})
-    return df_l[df_l['Cantidad_Pallets'] > 0].sort_values(by='ABC_XYZ').reset_index(drop=True)
 
 def mostrar_layout():
     st.title("🏗️ Diseñador de Layout de Bodega")
