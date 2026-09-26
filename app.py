@@ -180,7 +180,7 @@ def calcular_metricas_dinamicas(fila, mapa, modo="EXCEL"):
     if stock <= 0: estado = "SIN STOCK"
     elif cap_usada <= 0: estado = "REVISAR DATOS"
     elif es_numero(peso_pal) and peso_pal > MAX_PESO_PALLET: estado = "⚠️ PELIGRO: SOBREPESO (>1200kg)"
-    elif modo == "EXCEL" and abs((cap_op - cap_ex) if es_numero(cap_ex) else 0) > 0: estado = f"⚠️ EXCEL: {int(cap_ex)}u | ÓPTIMO: {cap_op}u"
+    elif modo == "EXCEL" and abs((cap_op - cap_ex) if es_numero(cap_ex) else 0) > 0: estado = f"⚠️ EXCEL: {int(cap_ex)}u | ÓPTIMO: {cap_optima}u"
 
     return {"Capacidad_Usada": cap_usada, "Pallets": pallets, "Unidades_Ultimo": ult_unids, "Ocupacion_Ultimo": (ult_unids / cap_usada * 100) if cap_usada > 0 else 0, "Peso_Pallet": peso_pal, "Estado": estado, "Cap_Excel": cap_ex, "Cap_Optima": cap_op, "Eficiencia_Volumen": efi_vol, "Pallets_Completos": pallets_comp, "Unidades_Sobrante": u_sob, "Stock": stock}
 
@@ -347,8 +347,12 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     dyr, ny = (a_m / (cy + 1), cy) if cy > 0 else (dp_y, math.floor(a_m / dp_y) if dp_y > 0 else 0)
     pil_r = [(px * dxr, py * dyr) for px in range(1, nx + 1) for py in range(1, ny + 1)]
     v_pil = [(py, px) for px, py in pil_r] if is_vertical else pil_r
+    
+    if 'ABC_XYZ' in df_activa.columns: df_activa = df_activa.sort_values(by='ABC_XYZ')
 
+    ofi = [{'x': conf['ofi_pos_x'], 'y': conf['ofi_pos_y'], 'w': conf['ofi_largo'], 'd': conf['ofi_ancho'], 'h': conf['ofi_alto']}] if conf['ofi_largo'] > 0 else []
     m_v, m_l, alm = 0, [], []
+    
     for f in range(filas):
         l_pas = chr(64 + f + 1) if f+1 <= 26 else f"P{f+1}"
         yr1, yr2 = (f * a_b) + 2.0, (f * a_b) + 2.0 + pp_d
@@ -359,7 +363,7 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
                 n_m = (s * m_x_s) + m + 1
                 for yr in [yr1, yr2]:
                     rx1, ry1, rx2, ry2 = (yr, xp, yr+pp_d, xp+l_mod) if is_vertical else (xp, yr, xp+l_mod, yr+pp_d)
-                    if any(not (rx2+1.5<o['x'] or rx1-1.5>o['x']+o['w'] or ry2+1.5<o['y'] or ry1-1.5>o['y']+o['d']) for o in conf.get('oficinas', [])) or any(not (rx2<z['x1'] or rx1>z['x2'] or ry2<z['y1'] or ry1>z['y2']) for z in sz): continue
+                    if any(not (rx2+1.5<o['x'] or rx1-1.5>o['x']+o['w'] or ry2+1.5<o['y'] or ry1-1.5>o['y']+o['d']) for o in ofi) or any(not (rx2<z['x1'] or rx1>z['x2'] or ry2<z['y1'] or ry1>z['y2']) for z in sz): continue
                     b_p = any(xp <= px <= xp + l_mod and yr - 0.25 <= py <= yr + pp_d + 0.25 for px, py in v_pil)
                     m_l.append({'x': xp, 'y': yr, 'bloqueado': b_p})
                     if not b_p: 
@@ -382,7 +386,7 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
                 u += 1
         r_ub.append({'Ubicadas': u})
 
-    return {'modulos': m_v, 'niveles': niv, 'capacidad': len(alm), 'demanda': int(df_activa['Cantidad_Pallets'].sum()), 'diferencia': len(alm) - int(df_activa['Cantidad_Pallets'].sum()), 'staging': sz, 'oficinas': conf.get('oficinas', []), 'modulos_list': m_l, 'almacen': alm, 'pilares_reales': pil_r, 'pallets_ubicados_totales': sum(r['Ubicadas'] for r in r_ub), 'alt_nivel_viga': a_n_v, 'l_modulo': l_mod, 't_marco': t_m, 'pp_d': pp_d, 'ap_w': ap_w, 'viga_h': 0.12, 'is_vertical': is_vertical}
+    return {'modulos': m_v, 'niveles': niv, 'capacidad': len(alm), 'demanda': int(df_activa['Cantidad_Pallets'].sum()), 'diferencia': len(alm) - int(df_activa['Cantidad_Pallets'].sum()), 'staging': sz, 'oficinas': ofi, 'modulos_list': m_l, 'almacen': alm, 'pilares_reales': pil_r, 'pallets_ubicados_totales': sum(r['Ubicadas'] for r in r_ub), 'alt_nivel_viga': a_n_v, 'l_modulo': l_mod, 't_marco': t_m, 'pp_d': pp_d, 'ap_w': ap_w, 'viga_h': 0.12, 'is_vertical': is_vertical}
 
 def add_cube_rotated(capa, x0, y0, z0, dx, dy, dz, is_vertical, hover_txt=None):
     if is_vertical: capa.agregar_cubo(y0, x0, z0, dy, dx, dz, hover_txt)
@@ -391,6 +395,8 @@ def add_cube_rotated(capa, x0, y0, z0, dx, dy, dz, is_vertical, hover_txt=None):
 def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas, modo_vista):
     d_abc = {'A': '#e74c3c', 'B': '#f39c12', 'C': '#3498db'}
     d_xyz = {'AX': '#900C3F', 'AY': '#C70039', 'AZ': '#FF5733', 'BX': '#E67E22', 'BY': '#F39C12', 'BZ': '#F1C40F', 'CX': '#2E86C1', 'CY': '#3498DB', 'CZ': '#85C1E9'}
+
+    if skus_buscados and 'TODOS' in skus_buscados: skus_buscados = set()
 
     c_pil = MallaAgrupada('#e74c3c', 'Pilares CD'); c_ofi = MallaAgrupada('#bdc3c7', 'Oficinas', 0.9); c_sz = MallaAgrupada('#f39c12', 'Staging', 0.4)
     c_m = MallaAgrupada('#2c3e50', 'Rack', 0.1 if skus_buscados else 1.0); c_mb = MallaAgrupada('#7f8c8d', 'Rack Inactivo', 0.4)
@@ -415,7 +421,7 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas,
         for n_v in range(1, res['niveles']):
             zv = n_v * res['alt_nivel_viga'] - res['viga_h']
             add_cube_rotated(cv, xp + t, yr, zv, res['l_modulo'] - 2*t, t/2, res['viga_h'], is_vertical)
-            add_cube_rotated(cv, xp + t, y_rack + res['pp_d'] - t/2, zv, res['l_modulo'] - 2*t, t/2, res['viga_h'], is_vertical)
+            add_cube_rotated(cv, xp + t, yr + res['pp_d'] - t/2, zv, res['l_modulo'] - 2*t, t/2, res['viga_h'], is_vertical)
 
     for slot in res['almacen']:
         if slot['ocupado']:
@@ -477,6 +483,193 @@ def mostrar_portada():
         st.markdown("""<div class="color-card color-card-rose" style="opacity: 0.85;"><div><div class="card-icon-header"><span class="card-icon">📤</span><span class="card-tag-color tag-soon">EN DESARROLLO</span></div><div class="color-card-title">Salida de Mercadería (Outbound)</div><p class="color-card-desc">Planificación de despacho, consolidación de pedidos por ruta y cubicaje avanzado de camiones de carga.</p></div></div>""", unsafe_allow_html=True)
         st.button("🔒 Módulo en Construcción", key="btn_out", disabled=True, use_container_width=True)
 
+def mostrar_cubicadora():
+    st.markdown(css_styles, unsafe_allow_html=True)
+    st.title("📦 Cubicadora de Palletización Masiva")
+
+    archivo_subido = st.file_uploader("📂 Sube tu archivo Excel con la base de datos (Raw Data o Reporte Optimizado)", type=["xlsx"])
+    if archivo_subido is not None:
+        with st.spinner("Procesando base de datos..."):
+            try: df_original = pd.read_excel(archivo_subido, sheet_name="Data Equipo 7")
+            except: df_original = pd.read_excel(archivo_subido, sheet_name=0)
+            df_res, MAPA = procesar_datos(df_original.dropna(how="all").reset_index(drop=True))
+            st.session_state.df_original, st.session_state.df_resultados, st.session_state.mapa_columnas = df_original, df_res, MAPA
+
+    if st.session_state.df_resultados is not None:
+        df_f = st.session_state.df_resultados.copy()
+        MAPA = st.session_state.mapa_columnas
+        
+        col_m1, col_m2 = st.columns(2)
+        with col_m1: modo = st.radio("⚙️ Modo de cálculo:", ["EXCEL", "OPTIMO"], horizontal=True)
+        with col_m2:
+            if MAPA.get('abc'):
+                opc_abc = sorted([str(x) for x in df_f[MAPA['abc']].unique() if str(x) != 'nan'])
+                if opc_abc: df_f = df_f[df_f[MAPA['abc']].isin(st.multiselect("🔍 Filtro Rápido (ABC):", opc_abc, default=opc_abc))]
+            if MAPA.get('xyz'):
+                opc_xyz = sorted([str(x) for x in df_f[MAPA['xyz']].unique() if str(x) != 'nan'])
+                if opc_xyz: df_f = df_f[df_f[MAPA['xyz']].isin(st.multiselect("🔍 Filtro Demanda (XYZ):", opc_xyz, default=opc_xyz))]
+
+        st.markdown("<h3 style='color:#0f172a; font-weight:800; font-size:18px; margin-top:20px;'>🔍 Buscador Masivo y Panel de Cálculo</h3>", unsafe_allow_html=True)
+        
+        lista_skus_all = df_f[MAPA["sku"]].astype(str).str.upper().unique().tolist()
+        opcion_vis = st.radio("Método de Visualización:", ["Elegir de la lista", "Pegar lista (Excel)", "Ver primeros 10", "Ver TODOS"], horizontal=True)
+        
+        skus_a_procesar = []
+        if opcion_vis == "Elegir de la lista":
+            def_sel = [lista_skus_all[0]] if (lista_skus_all and not st.session_state.skus_activos) else [s for s in st.session_state.skus_activos if s in lista_skus_all]
+            if not def_sel and lista_skus_all: def_sel = [lista_skus_all[0]]
+            skus_a_procesar = st.multiselect("Seleccionar SKUs individualmente:", options=lista_skus_all, default=def_sel)
+        elif opcion_vis == "Pegar lista (Excel)":
+            txt_list = st.text_area("Pega aquí la columna copiada de Excel (SKUs separados por espacio, coma o salto de línea):", height=80)
+            if txt_list:
+                ext = [s.strip().upper() for s in re.split(r'[,\s;\n]+', txt_list) if s.strip()]
+                skus_a_procesar = [s for s in ext if s in lista_skus_all]
+                inv = [s for s in ext if s not in lista_skus_all]
+                if inv: st.warning(f"⚠️ Los siguientes SKUs no se encontraron en la base (o están filtrados): {', '.join(inv)}")
+        elif opcion_vis == "Ver primeros 10": skus_a_procesar = lista_skus_all[:10]
+        elif opcion_vis == "Ver TODOS": skus_a_procesar = lista_skus_all
+
+        st.session_state.skus_activos = skus_a_procesar
+        st.markdown("<br>", unsafe_allow_html=True)
+        mostrar_graf = st.toggle("🖼️ Mostrar Planos 2D / 3D (Desactiva esta opción para obtener mayor velocidad en búsquedas masivas)", value=True)
+
+        if st.session_state.skus_activos: df_kpi = df_f[df_f[MAPA['sku']].astype(str).str.upper().isin(st.session_state.skus_activos)]
+        else: df_kpi = df_f
+
+        tot_sku_kpi = len(df_f)
+        con_stock_kpi = int((pd.to_numeric(df_f[MAPA["stock"] if not MAPA.get('is_opt_report') else 'Stock'], errors="coerce").fillna(0) > 0).sum())
+        tot_pallets_kpi = sum([calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"] for _, row in df_f.iterrows()])
+        alertas_activas_kpi = sum(1 for _, row in df_f.iterrows() if "EXCEL" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "PELIGRO" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "REVISAR" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"])
+
+        modo_txt = "MODO EXCEL (VALORES MANUALES)" if modo == "EXCEL" else "MODO OPTIMIZADO (MÁXIMA FÍSICA)"
+        color_modo = "#3b82f6" if modo == "EXCEL" else "#f59e0b"
+        
+        st.markdown(f"""
+        <div style="font-family: 'Segoe UI', system-ui, sans-serif; background: #0f172a; border-radius: 12px 12px 0 0; padding: 18px 25px; display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+            <div><h3 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.5px;">WMS Analytics: Dashboard Paletizado</h3><p style="color: #94a3b8; margin: 3px 0 0 0; font-size: 12px;">Estado: <b style="color:{color_modo};">{modo_txt}</b></p></div>
+            <div><span style="background: {color_modo}; color: white; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; letter-spacing: 0.5px;">{modo}</span></div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        k1, k2, k3, k4, k5 = st.columns(5)
+        with k1: st.markdown(f"<div style='background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #3b82f6;border-radius:0 0 0 8px;padding:14px 16px;margin-bottom:20px;'><div style='font-size:10px;font-weight:800;color:#64748b;letter-spacing:0.5px;margin-bottom:4px;'>TOTAL SKU (FILTRADO)</div><div style='font-size:22px;font-weight:800;color:#0f172a;'>{tot_sku_kpi:,}</div></div>", unsafe_allow_html=True)
+        with k2: st.markdown(f"<div style='background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #10b981;padding:14px 16px;margin-bottom:20px;'><div style='font-size:10px;font-weight:800;color:#64748b;letter-spacing:0.5px;margin-bottom:4px;'>SKUs CON STOCK</div><div style='font-size:22px;font-weight:800;color:#0f172a;'>{con_stock_kpi:,}</div></div>", unsafe_allow_html=True)
+        with k3: st.markdown(f"<div style='background:#f5f3ff;border:1px solid #ddd6fe;border-left:4px solid #6366f1;padding:14px 16px;margin-bottom:20px;'><div style='font-size:10px;font-weight:800;color:#4338ca;letter-spacing:0.5px;margin-bottom:4px;'>PALLETS REQ.</div><div style='font-size:22px;font-weight:800;color:#4f46e5;'>{tot_pallets_kpi:,}</div></div>", unsafe_allow_html=True)
+        with k4: st.markdown(f"<div style='background:#f5f3ff;border:1px solid #ddd6fe;border-left:4px solid #8b5cf6;padding:14px 16px;margin-bottom:20px;'><div style='font-size:10px;font-weight:800;color:#5b21b6;letter-spacing:0.5px;margin-bottom:4px;'>POSICIONES</div><div style='font-size:22px;font-weight:800;color:#7c3aed;'>{tot_pallets_kpi:,}</div></div>", unsafe_allow_html=True)
+        with k5: st.markdown(f"<div style='background:#fef2f2;border:1px solid #fecaca;border-left:4px solid #ef4444;border-radius:0 0 8px 0;padding:14px 16px;margin-bottom:20px;'><div style='font-size:10px;font-weight:800;color:#991b1b;letter-spacing:0.5px;margin-bottom:4px;'>ALERTAS ACTIVAS</div><div style='font-size:22px;font-weight:800;color:{'#dc2626' if alertas_activas_kpi > 0 else '#10b981'};'>{alertas_activas_kpi:,}</div></div>", unsafe_allow_html=True)
+
+        st.markdown("---")
+        tab_buscar, tab_descargar, tab_alertas, tab_datos = st.tabs(["🔍 Resultados Detallados", "📥 Descargar Reporte", "🚨 Ver Alertas", "📊 Base de Datos"])
+
+        with tab_buscar:
+            if not st.session_state.skus_activos: st.markdown("<div style='text-align:center; padding: 30px; color:#64748b;'><h4>No hay SKUs seleccionados. Selecciona opciones en el buscador arriba.</h4></div>", unsafe_allow_html=True)
+            else:
+                for sku in st.session_state.skus_activos:
+                    filtro = df_kpi[df_kpi[MAPA["sku"]].astype(str).str.upper() == sku]
+                    if not filtro.empty:
+                        fila = filtro.iloc[0]
+                        m = calcular_metricas_dinamicas(fila, MAPA, modo)
+                        
+                        formato = fila.get(MAPA.get('formato', 'Formato'), 'N/D')
+                        fam = fila.get(MAPA.get('familia', 'Familia'), 'N/D')
+                        bodega = fila.get(MAPA.get('bodega', 'Bodega'), 'N/D')
+                        rank = fila.get(MAPA.get('ranking', 'Ranking'), 'N/D')
+                        abc_xyz = fila.get(MAPA.get('abc_xyz', 'Matriz_ABC_XYZ'), 'N/D')
+                        
+                        if pd.isna(formato): formato = 'N/D'
+                        if pd.isna(fam): fam = 'N/D'
+                        if pd.isna(bodega): bodega = 'N/D'
+                        if pd.isna(rank): rank = 'N/D'
+                        if pd.isna(abc_xyz): abc_xyz = 'N/D'
+                        
+                        cap, cap_excel, cap_optima, pallets, peso_est, efi_vol, ult_unids, ult_pct, estado = m['Capacidad_Usada'], m['Cap_Excel'], m['Cap_Optima'], m['Pallets'], m['Peso_Pallet'], m['Eficiencia_Volumen'], m['Unidades_Ultimo'], m['Ocupacion_Ultimo'], m['Estado']
+                        color_estado = "#ef4444" if "PELIGRO" in estado or "EXCEL" in estado else "#f59e0b" if "REVISAR" in estado else "#10b981"
+                        bg_estado = "#fef2f2" if "PELIGRO" in estado or "EXCEL" in estado else "#fffbeb" if "REVISAR" in estado else "#ecfdf5"
+                        border_estado = "#fecaca" if "PELIGRO" in estado or "EXCEL" in estado else "#fde68a" if "REVISAR" in estado else "#a7f3d0"
+
+                        html_header = f"""
+                        <div style="font-family: 'Segoe UI', system-ui, sans-serif; width: 100%; background: #ffffff; border: 1px solid #e2e8f0; border-bottom:none; border-radius: 12px 12px 0 0; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; box-sizing: border-box;">
+                            <div style="background: #0f172a; padding: 20px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid {color_estado};">
+                                <div><div style="color: #94a3b8; font-size: 11px; font-weight: 800; letter-spacing: 1px;">ANÁLISIS DE ESTIBA ({'MODO OPTIMIZADO' if modo == 'OPTIMO' else 'MODO EXCEL'})</div><div style="color: #ffffff; font-size: 26px; font-weight: 900; margin: 4px 0;">{sku}</div><div style="color: #cbd5e1; font-size: 13px;">Formato: <span style="color: #fff; font-weight:600;">{formato}</span> &nbsp;|&nbsp; Familia: <span style="color: #fff; font-weight:600;">{fam}</span> &nbsp;|&nbsp; Bodega: <span style="color: #38bdf8; font-weight:700;">{bodega}</span></div></div>
+                                <div style="background: {bg_estado}; border: 1px solid {border_estado}; padding: 10px 18px; border-radius: 6px; text-align: right;"><div style="color: {color_estado}; font-size: 10px; font-weight: 900;">DIAGNÓSTICO</div><div style="color: {color_estado}; font-size: 15px; font-weight: 900;">{estado}</div></div>
+                            </div>
+                            <div style="padding: 20px 25px 5px 25px;">
+                                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin-bottom: 15px;">
+                                    <div class="kpi-box"><div class="kpi-title">Stock Prom.</div><div class="kpi-value">{fmt(m['Stock'], 1)}</div></div>
+                                    <div class="kpi-box" style="background:#f0f9ff; border:1px solid #bae6fd;"><div class="kpi-title">Unid. Pallet</div><div class="kpi-value" style="color:#0284c7;">{fmt(cap, 0)}</div></div>
+                                    <div class="kpi-box" style="background:#f0f9ff; border:1px solid #bae6fd;"><div class="kpi-title">Pallets Req.</div><div class="kpi-value" style="color:#0284c7;">{pallets}</div></div>
+                                    <div class="kpi-box {'kpi-box-danger' if es_numero(peso_est) and peso_est > MAX_PESO_PALLET else ''}"><div class="kpi-title">Peso (Kg)</div><div class="kpi-value {'kpi-value-danger' if es_numero(peso_est) and peso_est > MAX_PESO_PALLET else ''}">{fmt(peso_est, 1)}</div></div>
+                                    <div class="kpi-box"><div class="kpi-title">Volumen %</div><div class="kpi-value">{fmt(efi_vol, 1)}%</div></div>
+                                </div>
+                            </div>
+                        </div>
+                        """
+                        
+                        html_datos_base = f"""
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 0 12px; padding: 20px; font-family: system-ui; height: 100%; box-sizing: border-box;">
+                            <h4 style="margin:0 0 10px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">📋 Datos Base</h4>
+                            <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="font-weight:600;">Largo:</span><span>{fmt(a_float(valor_col(fila, 'largo', MAPA)),1)} cm</span><span style="font-weight:600;">Ancho:</span><span>{fmt(a_float(valor_col(fila, 'ancho', MAPA)),1)} cm</span><span style="font-weight:600;">Alto:</span><span>{fmt(a_float(valor_col(fila, 'alto', MAPA)),1)} cm</span><span style="font-weight:600;">Peso:</span><span>{fmt(a_float(valor_col(fila, 'peso', MAPA)),2)} kg</span></div>
+                            <h4 style="margin:16px 0 8px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">🏷️ Perfil Logístico</h4>
+                            <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="font-weight:600;">Ranking:</span><span>#{fmt(rank,0) if es_numero(rank) else rank}</span><span style="font-weight:600;">Matriz ABC-XYZ:</span><span style="font-weight:bold; color:#0284c7;">{abc_xyz}</span><span style="font-weight:600;">Zonificación:</span><span style="font-weight:bold; color:#0f766e;">{bodega}</span></div>
+                            <h4 style="margin:16px 0 8px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">⚙️ Resultados</h4>
+                            <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="color:#ef4444; font-weight:bold;">Excel (Manual):</span><span style="color:#ef4444; font-weight:bold;">{fmt(cap_excel,0)} u</span><span style="color:#10b981; font-weight:bold;">Óptimo Física:</span><span style="color:#10b981; font-weight:bold;">{fmt(cap_optima,0)} u</span><span style="font-weight:600;">Últ. Pallet:</span><span>{fmt(ult_pct,1)}% ({fmt(ult_unids,1)}u)</span></div>
+                        </div>
+                        """
+
+                        st.markdown(html_header, unsafe_allow_html=True)
+                        if mostrar_graf and not MAPA.get('is_opt_report'):
+                            col_izq, col_der = st.columns([1, 3])
+                            with col_izq: st.markdown(html_datos_base, unsafe_allow_html=True)
+                            with col_der:
+                                st.markdown("<div style='border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 0; padding: 20px; background: #ffffff; height: 100%;'>", unsafe_allow_html=True)
+                                mostrar_3d_sku = st.toggle(f"🧊 Levantar Maqueta 3D", key=f"t_{sku}")
+                                c_pb1, c_pb2, c_pb3 = st.columns(3)
+                                with c_pb1: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#334155; margin-bottom:5px;'>PLANO PLANTA (N1)</div>", unsafe_allow_html=True); st.markdown(html_vista_superior(fila, MAPA), unsafe_allow_html=True)
+                                with c_pb2: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#334155; margin-bottom:5px;'>PLANO ALZADO</div>", unsafe_allow_html=True); st.markdown(html_vista_lateral(fila, MAPA, m['Capacidad_Usada']), unsafe_allow_html=True)
+                                with c_pb3: 
+                                    if mostrar_3d_sku: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada']), use_container_width=True, key=f"pb_{sku}")
+                                    else: st.markdown("<div style='height:200px; display:flex; align-items:center; justify-content:center; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; color:#94a3b8; font-size:11px; font-weight:bold;'>Activa el botón 'Levantar Maqueta 3D' para renderizar.</div>", unsafe_allow_html=True)
+                                st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+                                c_ps1, c_ps2, c_ps3 = st.columns(3)
+                                with c_ps1: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#0284c7; margin-bottom:5px;'>PLANTA PALLET SOBRANTE</div>", unsafe_allow_html=True); st.markdown(html_vista_superior(fila, MAPA, m['Unidades_Sobrante']), unsafe_allow_html=True)
+                                with c_ps2: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#0284c7; margin-bottom:5px;'>ALZADO PALLET SOBRANTE</div>", unsafe_allow_html=True); st.markdown(html_vista_lateral(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Sobrante']), unsafe_allow_html=True)
+                                with c_ps3: 
+                                    if mostrar_3d_sku: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Sobrante']), use_container_width=True, key=f"ps_{sku}")
+                                st.markdown("</div>", unsafe_allow_html=True)
+                        elif mostrar_graf and MAPA.get('is_opt_report'):
+                            col_izq, col_der = st.columns([1, 3])
+                            with col_izq: st.markdown(html_datos_base, unsafe_allow_html=True)
+                            with col_der: st.markdown("<div style='border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 0; padding: 20px; background: #ffffff; height: 100%; display:flex; align-items:center; justify-content:center;'><div style='text-align:center; color:#64748b;'><h4 style='margin:0;'>⚠️ Carga desde Reporte Optimizado</h4><p style='font-size:12px;'>El reporte optimizado no contiene las dimensiones crudas (Largo, Ancho, Alto) necesarias para dibujar el plano individual del producto.</p></div></div>", unsafe_allow_html=True)
+                        else: st.markdown(html_datos_base, unsafe_allow_html=True)
+                        st.markdown("<br>", unsafe_allow_html=True)
+
+        with tab_descargar:
+            st.write(f"Genera un Excel completo con las **24 columnas WMS** de los **{len(df_f)} SKUs** actuales.")
+            st.download_button("📊 Descargar Reporte WMS Completo (Excel)", data=generar_excel_descarga(st.session_state.df_original, df_f, MAPA), file_name="Reporte_Paletizacion_Optimizado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        with tab_alertas:
+            alertas = [{"SKU": row[MAPA["sku"]], "Estado": calcular_metricas_dinamicas(row, MAPA, modo)["Estado"], "Pallets": calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"]} for _, row in df_f.iterrows() if "EXCEL" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "PELIGRO" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "REVISAR" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"]]
+            if alertas: st.warning(f"Se encontraron {len(alertas)} SKUs con alertas."); st.dataframe(pd.DataFrame(alertas), use_container_width=True)
+            else: st.success("🎉 ¡Excelente! No hay alertas.")
+        with tab_datos: st.dataframe(df_f, use_container_width=True)
+    else: st.info("👆 Sube tu archivo Excel para comenzar.")
+
+def preparar_df_layout(df_base, mapa, modo):
+    df_l = pd.DataFrame({'SKU': df_base[mapa['sku']]})
+    metrics = [calcular_metricas_dinamicas(row, mapa, modo) for _, row in df_base.iterrows()]
+    df_l['Cantidad_Pallets'], df_l['Peso_Pallet_kg'] = [m['Pallets'] for m in metrics], [m['Peso_Pallet'] for m in metrics]
+    df_l['Pallets_Completos_Optimo'], df_l['Unidades_Sobrante_Optimo'], df_l['Capacidad_Optima'] = [m['Pallets_Completos'] for m in metrics], [m['Unidades_Sobrante'] for m in metrics], [m['Cap_Optima'] for m in metrics]
+    
+    col_alto = mapa.get('altura_total') if mapa.get('altura_total') in df_base.columns else mapa.get('alto')
+    df_l['Alto_m'] = pd.to_numeric(df_base[col_alto], errors='coerce').fillna(120) / 100.0 if col_alto and col_alto in df_base.columns else 1.2
+    
+    abc = df_base[mapa.get('abc')].fillna('C').astype(str).str.strip().str.upper() if mapa.get('abc') and mapa.get('abc') in df_base.columns else pd.Series('C', index=df_base.index)
+    xyz = df_base[mapa.get('xyz')].fillna('Z').astype(str).str.strip().str.upper() if mapa.get('xyz') and mapa.get('xyz') in df_base.columns else pd.Series('Z', index=df_base.index)
+    df_l['ABC_XYZ'] = df_base[mapa.get('abc_xyz')].fillna(abc + xyz).astype(str).str.strip().str.upper() if mapa.get('abc_xyz') and mapa.get('abc_xyz') in df_base.columns else abc + xyz
+    df_l['ABC_XYZ'] = df_l['ABC_XYZ'].replace({'N/D': 'CZ', 'N/DN/D': 'CZ', 'NAN': 'CZ'})
+    df_l['ABC_XYZ'] = df_l['ABC_XYZ'].astype(pd.CategoricalDtype(categories=['AX','AY','AZ','BX','BY','BZ','CX','CY','CZ'], ordered=True))
+    df_l['Formato'], df_l['ABC'] = df_base[mapa.get('formato')] if mapa.get('formato') and mapa.get('formato') in df_base.columns else 'N/D', abc.replace({'N/D': 'C', 'NAN': 'C'})
+    return df_l[df_l['Cantidad_Pallets'] > 0].sort_values(by='ABC_XYZ').reset_index(drop=True)
+
 def mostrar_layout():
     st.title("🏗️ Diseñador de Layout de Bodega")
     if st.session_state.df_resultados is None:
@@ -484,6 +677,7 @@ def mostrar_layout():
         return
 
     MAPA = st.session_state.mapa_columnas
+    
     df_layout_orig = preparar_df_layout(st.session_state.df_resultados.copy(), MAPA, "EXCEL")
     df_layout_opt = preparar_df_layout(st.session_state.df_resultados.copy(), MAPA, "OPTIMO")
     dict_demanda = {'Data Original': df_layout_orig, 'Data Optimizada': df_layout_opt}
@@ -772,7 +966,7 @@ def mostrar_outbound():
 menu_opciones = ["🏠 Portada Principal", "📦 Cubicadora WMS", "🏗️ Layout de Bodega", "📊 Analytics & Reportería", "📥 Entrada Mercadería", "📤 Salida Mercadería"]
 st.session_state.menu_seleccion = st.sidebar.radio("Navegación", menu_opciones, index=menu_opciones.index(st.session_state.menu_seleccion))
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v8.7 • UI Fixes")
+st.sidebar.caption("WMS Analytics Hub v8.8 • Core Fixes")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
