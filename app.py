@@ -364,7 +364,6 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
                     rx1, ry1, rx2, ry2 = (yr, xp, yr+pp_d, xp+l_mod) if is_vertical else (xp, yr, xp+l_mod, yr+pp_d)
                     if any(not (rx2+1.5<o['x'] or rx1-1.5>o['x']+o['w'] or ry2+1.5<o['y'] or ry1-1.5>o['y']+o['d']) for o in conf.get('oficinas', [])) or any(not (rx2<z['x1'] or rx1>z['x2'] or ry2<z['y1'] or ry1>z['y2']) for z in sz): continue
                     
-                    # Corrección del margen del pilar
                     b_p = any(xp - 0.25 <= px <= xp + l_mod + 0.25 and yr - 0.25 <= py <= yr + pp_d + 0.25 for px, py in v_pil)
                     
                     m_l.append({'x': xp, 'y': yr, 'bloqueado': b_p})
@@ -629,23 +628,19 @@ def mostrar_cubicadora():
                                 st.markdown(html_datos_base, unsafe_allow_html=True)
                             with col_der:
                                 st.markdown("<div style='border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 0; padding: 20px; background: #ffffff; height: 100%;'>", unsafe_allow_html=True)
-                                es_ultimo_sku = (sku == st.session_state.skus_activos[-1])
-                                if es_ultimo_sku:
-                                    mostrar_3d_sku = st.toggle(f"🧊 Levantar Maqueta 3D", key=f"t_{sku}")
-                                    c_pb1, c_pb2, c_pb3 = st.columns(3)
-                                    with c_pb1: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#334155; margin-bottom:5px;'>PLANO PLANTA (N1)</div>", unsafe_allow_html=True); st.markdown(html_vista_superior(fila, MAPA), unsafe_allow_html=True)
-                                    with c_pb2: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#334155; margin-bottom:5px;'>PLANO ALZADO</div>", unsafe_allow_html=True); st.markdown(html_vista_lateral(fila, MAPA, m['Capacidad_Usada']), unsafe_allow_html=True)
-                                    with c_pb3: 
-                                        if mostrar_3d_sku: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada']), use_container_width=True, key=f"pb_{sku}")
-                                        else: st.markdown("<div style='height:200px; display:flex; align-items:center; justify-content:center; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; color:#94a3b8; font-size:11px; font-weight:bold;'>Activa el botón 'Levantar Maqueta 3D' para renderizar.</div>", unsafe_allow_html=True)
-                                    st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
-                                    c_ps1, c_ps2, c_ps3 = st.columns(3)
-                                    with c_ps1: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#0284c7; margin-bottom:5px;'>PLANTA PALLET SOBRANTE</div>", unsafe_allow_html=True); st.markdown(html_vista_superior(fila, MAPA, m['Unidades_Sobrante']), unsafe_allow_html=True)
-                                    with c_ps2: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#0284c7; margin-bottom:5px;'>ALZADO PALLET SOBRANTE</div>", unsafe_allow_html=True); st.markdown(html_vista_lateral(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Sobrante']), unsafe_allow_html=True)
-                                    with c_ps3: 
-                                        if mostrar_3d_sku: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Sobrante']), use_container_width=True, key=f"ps_{sku}")
-                                else:
-                                    st.markdown("<div style='height:100%; display:flex; align-items:center; justify-content:center; color:#94a3b8; font-size:13px; font-weight:bold; text-align:center;'>Visualización 3D/2D omitida. Los planos completos se muestran solo para el último elemento para optimizar rendimiento.</div>", unsafe_allow_html=True)
+                                mostrar_3d_sku = st.toggle(f"🧊 Levantar Maqueta 3D", key=f"t_{sku}")
+                                c_pb1, c_pb2, c_pb3 = st.columns(3)
+                                with c_pb1: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#334155; margin-bottom:5px;'>PLANO PLANTA (N1)</div>", unsafe_allow_html=True); st.markdown(html_vista_superior(fila, MAPA), unsafe_allow_html=True)
+                                with c_pb2: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#334155; margin-bottom:5px;'>PLANO ALZADO</div>", unsafe_allow_html=True); st.markdown(html_vista_lateral(fila, MAPA, m['Capacidad_Usada']), unsafe_allow_html=True)
+                                with c_pb3: 
+                                    if mostrar_3d_sku: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada']), use_container_width=True, key=f"pb_{sku}")
+                                    else: st.markdown("<div style='height:200px; display:flex; align-items:center; justify-content:center; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; color:#94a3b8; font-size:11px; font-weight:bold;'>Activa el botón 'Levantar Maqueta 3D' para renderizar.</div>", unsafe_allow_html=True)
+                                st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+                                c_ps1, c_ps2, c_ps3 = st.columns(3)
+                                with c_ps1: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#0284c7; margin-bottom:5px;'>PLANTA PALLET SOBRANTE</div>", unsafe_allow_html=True); st.markdown(html_vista_superior(fila, MAPA, m['Unidades_Sobrante']), unsafe_allow_html=True)
+                                with c_ps2: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#0284c7; margin-bottom:5px;'>ALZADO PALLET SOBRANTE</div>", unsafe_allow_html=True); st.markdown(html_vista_lateral(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Sobrante']), unsafe_allow_html=True)
+                                with c_ps3: 
+                                    if mostrar_3d_sku: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Sobrante']), use_container_width=True, key=f"ps_{sku}")
                                 st.markdown("</div>", unsafe_allow_html=True)
                         elif mostrar_graf and MAPA.get('is_opt_report'):
                             col_izq, col_der = st.columns([1, 3])
@@ -693,58 +688,86 @@ def mostrar_layout():
 
     with st.expander("⚙️ PANEL MASTER CD (Configuración Completa de Bodega)", expanded=True):
         col_inf, col_dr, col_op, col_an = st.columns(4)
+        
         with col_inf:
             st.markdown("<h4 style='color:#2980b9; margin-top:0;'>🏢 1. Infraestructura</h4>", unsafe_allow_html=True)
-            st.session_state.l_bod = st.number_input('Largo Bodega (m):', value=st.session_state.l_bod)
-            st.session_state.a_bod = st.number_input('Ancho Bodega (m):', value=st.session_state.a_bod)
-            st.session_state.alt_bod = st.number_input('Alto Útil (m):', value=st.session_state.alt_bod)
+            st.number_input('Largo Bodega (m):', key='l_bod')
+            st.number_input('Ancho Bodega (m):', key='a_bod')
+            st.number_input('Alto Útil (m):', key='alt_bod')
             st.markdown("<b style='color:#7f8c8d; font-size:11px;'>MALLA DE PILARES</b>", unsafe_allow_html=True)
-            st.session_state.cant_pilares_x = st.number_input('Cant. Pilares X (0=Auto):', value=st.session_state.cant_pilares_x)
-            st.session_state.cant_pilares_y = st.number_input('Cant. Pilares Y (0=Auto):', value=st.session_state.cant_pilares_y)
-            st.session_state.dist_pilares_x = st.number_input('Dist. Pilares X (m):', value=st.session_state.dist_pilares_x)
-            st.session_state.dist_pilares_y = st.number_input('Dist. Pilares Y (m):', value=st.session_state.dist_pilares_y)
+            st.number_input('Cant. Pilares X (0=Auto):', key='cant_pilares_x')
+            st.number_input('Cant. Pilares Y (0=Auto):', key='cant_pilares_y')
+            st.number_input('Dist. Pilares X (m):', key='dist_pilares_x')
+            st.number_input('Dist. Pilares Y (m):', key='dist_pilares_y')
             st.markdown("<b style='color:#7f8c8d; font-size:11px;'>🏢 ZONA DE OFICINAS</b>", unsafe_allow_html=True)
-            st.session_state.ofi_pos_x = st.number_input('Pos. Inicio X (m):', value=st.session_state.ofi_pos_x)
-            st.session_state.ofi_pos_y = st.number_input('Pos. Inicio Y (m):', value=st.session_state.ofi_pos_y)
-            st.session_state.ofi_largo = st.number_input('Largo X (m):', value=st.session_state.ofi_largo)
-            st.session_state.ofi_ancho = st.number_input('Ancho Y (m):', value=st.session_state.ofi_ancho)
-            st.session_state.ofi_alto = st.number_input('Alto Z (m):', value=st.session_state.ofi_alto)
+            st.number_input('Pos. Inicio X (m):', key='ofi_pos_x')
+            st.number_input('Pos. Inicio Y (m):', key='ofi_pos_y')
+            st.number_input('Largo X (m):', key='ofi_largo')
+            st.number_input('Ancho Y (m):', key='ofi_ancho')
+            st.number_input('Alto Z (m):', key='ofi_alto')
+            
         with col_dr:
             st.markdown("<h4 style='color:#27ae60; margin-top:0;'>📦 2. Slotting y Racks</h4>", unsafe_allow_html=True)
             df_fuente_curr = dict_demanda['Data Original'] if st.session_state.fuente_datos == 'Data Original' else dict_demanda['Data Optimizada']
+            
+            clases_sel_box = []
+            if st.session_state.chk_a: clases_sel_box.append('A')
+            if st.session_state.chk_b: clases_sel_box.append('B')
+            if st.session_state.chk_c: clases_sel_box.append('C')
+            df_fuente_curr = df_fuente_curr[df_fuente_curr['ABC'].isin(clases_sel_box)]
+            
+            raw_f_box = st.session_state.filtro_sublayout.strip()
+            if raw_f_box and raw_f_box.upper() != 'TODOS':
+                skus_f_box = set(s.strip().upper() for s in re.split(r'[,\s;]+', raw_f_box) if s.strip())
+                if skus_f_box:
+                    df_fuente_curr = df_fuente_curr[df_fuente_curr['SKU'].astype(str).str.upper().isin(skus_f_box)]
+            
             tot_p_fuente = df_fuente_curr['Cantidad_Pallets'].sum()
-            st.markdown(f"<div style='background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:12px; font-size:12px; font-family:monospace; margin-bottom:12px;'><b style='color:#27ae60;'>✅ REPORTE CUBICADORA OK</b><br><b>Total a Ubicar:</b> {tot_p_fuente:,.0f} Pallets<br><span style='color:#e74c3c;'>🔹 Zona A: {df_fuente_curr[df_fuente_curr['ABC']=='A']['Cantidad_Pallets'].sum():,.0f} pal</span><br><span style='color:#e67e22;'>🔹 Zona B: {df_fuente_curr[df_fuente_curr['ABC']=='B']['Cantidad_Pallets'].sum():,.0f} pal</span><br><span style='color:#3498db;'>🔹 Zona C: {df_fuente_curr[df_fuente_curr['ABC']=='C']['Cantidad_Pallets'].sum():,.0f} pal</span></div>", unsafe_allow_html=True)
+            zona_a = df_fuente_curr[df_fuente_curr['ABC']=='A']['Cantidad_Pallets'].sum()
+            zona_b = df_fuente_curr[df_fuente_curr['ABC']=='B']['Cantidad_Pallets'].sum()
+            zona_c = df_fuente_curr[df_fuente_curr['ABC']=='C']['Cantidad_Pallets'].sum()
+            
+            st.markdown(f"<div style='background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:12px; font-size:12px; font-family:monospace; margin-bottom:12px;'><b style='color:#27ae60;'>✅ REPORTE CUBICADORA OK</b><br><b>Total a Ubicar:</b> {tot_p_fuente:,.0f} Pallets<br><span style='color:#e74c3c;'>🔹 Zona A: {zona_a:,.0f} pal</span><br><span style='color:#e67e22;'>🔹 Zona B: {zona_b:,.0f} pal</span><br><span style='color:#3498db;'>🔹 Zona C: {zona_c:,.0f} pal</span></div>", unsafe_allow_html=True)
+            
             st.markdown("<b style='color:#7f8c8d; font-size:11px;'>ESTRUCTURA RACK</b>", unsafe_allow_html=True)
-            st.session_state.pallets_viga = st.selectbox('Config. Viga:', [1, 2, 3], index=[1,2,3].index(st.session_state.pallets_viga))
-            st.session_state.peso_max_pallet = st.number_input('Peso Máx. Viga (kg):', value=st.session_state.peso_max_pallet)
+            st.selectbox('Config. Viga:', [1, 2, 3], key='pallets_viga')
+            st.number_input('Peso Máx. Viga (kg):', key='peso_max_pallet')
             st.session_state.oficinas = [{'x': st.session_state.ofi_pos_x, 'y': st.session_state.ofi_pos_y, 'w': st.session_state.ofi_largo, 'd': st.session_state.ofi_ancho, 'h': st.session_state.ofi_alto}] if st.session_state.ofi_largo > 0 else []
+            
         with col_op:
             st.markdown("<h4 style='color:#e67e22; margin-top:0;'>🚜 3. Operación</h4>", unsafe_allow_html=True)
             st.markdown("<b style='color:#7f8c8d; font-size:11px;'>DISEÑO DE TRÁNSITO</b>", unsafe_allow_html=True)
-            st.session_state.tipo_flujo = st.selectbox('Flujo:', ['Ninguno', 'Flujo en U', 'Flujo en I (Línea Recta)', 'Flujo en L'], index=['Ninguno', 'Flujo en U', 'Flujo en I (Línea Recta)', 'Flujo en L'].index(st.session_state.tipo_flujo))
-            st.session_state.ancho_porton = st.number_input('Ancho P. Auto (m):', value=st.session_state.ancho_porton)
-            st.session_state.orientacion_rack = st.selectbox('Orientación:', ['Automática', 'Horizontal (X)', 'Vertical (Y)'], index=['Automática', 'Horizontal (X)', 'Vertical (Y)'].index(st.session_state.orientacion_rack))
-            st.session_state.pasillo = st.number_input('Ancho Pasillo (m):', value=st.session_state.pasillo)
-            st.session_state.cant_pas_trans = st.number_input('Pasillos Trans.:', value=st.session_state.cant_pas_trans)
-            st.session_state.ancho_pas_trans = st.number_input('Ancho P. Trans. (m):', value=st.session_state.ancho_pas_trans)
+            st.selectbox('Flujo:', ['Ninguno', 'Flujo en U', 'Flujo en I (Línea Recta)', 'Flujo en L'], key='tipo_flujo')
+            st.number_input('Ancho P. Auto (m):', key='ancho_porton')
+            st.selectbox('Orientación:', ['Automática', 'Horizontal (X)', 'Vertical (Y)'], key='orientacion_rack')
+            st.number_input('Ancho Pasillo (m):', key='pasillo')
+            st.number_input('Pasillos Trans.:', key='cant_pas_trans')
+            st.number_input('Ancho P. Trans. (m):', key='ancho_pas_trans')
             st.markdown("<b style='color:#d35400; font-size:11px;'>RESTRICCIONES FÍSICAS</b>", unsafe_allow_html=True)
-            st.session_state.alt_grua = st.number_input('Alt. Máx. Grúa (m):', value=st.session_state.alt_grua)
-            st.session_state.peso_max_grua = st.number_input('Cap. Grúa (kg):', value=st.session_state.peso_max_grua)
+            st.number_input('Alt. Máx. Grúa (m):', key='alt_grua')
+            st.number_input('Cap. Grúa (kg):', key='peso_max_grua')
             st.markdown("<b style='color:#7f8c8d; font-size:11px;'>ACCESOS EXTRA</b>", unsafe_allow_html=True)
             c_p1, c_p2 = st.columns(2)
             with c_p1:
-                st.session_state.cant_ptas_norte = st.number_input('Ptas Norte:', value=st.session_state.cant_ptas_norte); st.session_state.cant_ptas_sur = st.number_input('Ptas Sur:', value=st.session_state.cant_ptas_sur); st.session_state.cant_ptas_este = st.number_input('Ptas Este:', value=st.session_state.cant_ptas_este); st.session_state.cant_ptas_oeste = st.number_input('Ptas Oeste:', value=st.session_state.cant_ptas_oeste)
+                st.number_input('Ptas Norte:', key='cant_ptas_norte')
+                st.number_input('Ptas Sur:', key='cant_ptas_sur')
+                st.number_input('Ptas Este:', key='cant_ptas_este')
+                st.number_input('Ptas Oeste:', key='cant_ptas_oeste')
             with c_p2:
-                st.session_state.w_ptas_norte = st.number_input('Ancho N:', value=st.session_state.w_ptas_norte); st.session_state.w_ptas_sur = st.number_input('Ancho S:', value=st.session_state.w_ptas_sur); st.session_state.w_ptas_este = st.number_input('Ancho E:', value=st.session_state.w_ptas_este); st.session_state.w_ptas_oeste = st.number_input('Ancho O:', value=st.session_state.w_ptas_oeste)
+                st.number_input('Ancho N:', key='w_ptas_norte')
+                st.number_input('Ancho S:', key='w_ptas_sur')
+                st.number_input('Ancho E:', key='w_ptas_este')
+                st.number_input('Ancho O:', key='w_ptas_oeste')
+                
         with col_an:
             st.markdown("<h4 style='color:#8e44ad; margin-top:0;'>🔍 4. Análisis y Filtros</h4>", unsafe_allow_html=True)
-            st.session_state.fuente_datos = st.selectbox('📂 Fuente:', ['Data Original', 'Data Optimizada'], index=['Data Original', 'Data Optimizada'].index(st.session_state.fuente_datos))
-            st.session_state.filtro_sublayout = st.text_area('✂️ Filtrar SKU (Dejar vacío para bodega completa):', value=st.session_state.filtro_sublayout, height=50)
+            st.selectbox('📂 Fuente:', ['Data Original', 'Data Optimizada'], key='fuente_datos')
+            st.text_area('✂️ Filtrar SKU (Dejar vacío para bodega completa):', height=50, key='filtro_sublayout')
             st.markdown("<b style='font-size:11px; color:#34495e;'>🔠 Zonas ABC a procesar:</b>", unsafe_allow_html=True)
             cb_a, cb_b, cb_c = st.columns(3)
-            with cb_a: st.session_state.chk_a = st.checkbox('Zona A', value=st.session_state.chk_a)
-            with cb_b: st.session_state.chk_b = st.checkbox('Zona B', value=st.session_state.chk_b)
-            with cb_c: st.session_state.chk_c = st.checkbox('Zona C', value=st.session_state.chk_c)
+            with cb_a: st.checkbox('Zona A', key='chk_a')
+            with cb_b: st.checkbox('Zona B', key='chk_b')
+            with cb_c: st.checkbox('Zona C', key='chk_c')
             st.markdown("<b style='font-size:10px; color:#34495e; margin-top:5px; display:block;'>CONTROLES DE EVALUACIÓN:</b>", unsafe_allow_html=True)
             
             if st.button("🎯 Crear Layout (SKUs Seleccionados)", type="primary", use_container_width=True):
@@ -855,7 +878,6 @@ def mostrar_layout():
                     else: path_free.append(path)
             else: path_free.append(path)
 
-        # ¡CORRECCIÓN APLICADA AQUÍ! Se eliminó el swap erróneo de px y py para que coincida con la realidad física y el 3D
         for px, py in res['pilares_reales']:
             rx0, ry0, rx1, ry1 = px-0.25, py-0.25, px+0.25, py+0.25
             path_pil.append(f"M {rx0} {ry0} L {rx1} {ry0} L {rx1} {ry1} L {rx0} {ry1} Z")
