@@ -318,10 +318,8 @@ def preparar_df_layout(df_base, mapa, modo):
     metrics = [calcular_metricas_dinamicas(row, mapa, modo) for _, row in df_base.iterrows()]
     df_l['Cantidad_Pallets'], df_l['Peso_Pallet_kg'] = [m['Pallets'] for m in metrics], [m['Peso_Pallet'] for m in metrics]
     df_l['Pallets_Completos_Optimo'], df_l['Unidades_Sobrante_Optimo'], df_l['Capacidad_Optima'] = [m['Pallets_Completos'] for m in metrics], [m['Unidades_Sobrante'] for m in metrics], [m['Cap_Optima'] for m in metrics]
-    
     col_alto = mapa.get('altura_total') if mapa.get('altura_total') in df_base.columns else mapa.get('alto')
     df_l['Alto_m'] = pd.to_numeric(df_base[col_alto], errors='coerce').fillna(120) / 100.0 if col_alto and col_alto in df_base.columns else 1.2
-    
     abc = df_base[mapa.get('abc')].fillna('C').astype(str).str.strip().str.upper() if mapa.get('abc') and mapa.get('abc') in df_base.columns else pd.Series('C', index=df_base.index)
     xyz = df_base[mapa.get('xyz')].fillna('Z').astype(str).str.strip().str.upper() if mapa.get('xyz') and mapa.get('xyz') in df_base.columns else pd.Series('Z', index=df_base.index)
     df_l['ABC_XYZ'] = df_base[mapa.get('abc_xyz')].fillna(abc + xyz).astype(str).str.strip().str.upper() if mapa.get('abc_xyz') and mapa.get('abc_xyz') in df_base.columns else abc + xyz
@@ -366,6 +364,7 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
                     rx1, ry1, rx2, ry2 = (yr, xp, yr+pp_d, xp+l_mod) if is_vertical else (xp, yr, xp+l_mod, yr+pp_d)
                     if any(not (rx2+1.5<o['x'] or rx1-1.5>o['x']+o['w'] or ry2+1.5<o['y'] or ry1-1.5>o['y']+o['d']) for o in conf.get('oficinas', [])) or any(not (rx2<z['x1'] or rx1>z['x2'] or ry2<z['y1'] or ry1>z['y2']) for z in sz): continue
                     
+                    # Corrección del margen del pilar
                     b_p = any(xp - 0.25 <= px <= xp + l_mod + 0.25 and yr - 0.25 <= py <= yr + pp_d + 0.25 for px, py in v_pil)
                     
                     m_l.append({'x': xp, 'y': yr, 'bloqueado': b_p})
@@ -856,8 +855,9 @@ def mostrar_layout():
                     else: path_free.append(path)
             else: path_free.append(path)
 
+        # ¡CORRECCIÓN APLICADA AQUÍ! Se eliminó el swap erróneo de px y py para que coincida con la realidad física y el 3D
         for px, py in res['pilares_reales']:
-            rx0, ry0, rx1, ry1 = (py-0.25, px-0.25, py+0.25, px+0.25) if res['is_vertical'] else (px-0.25, py-0.25, px+0.25, py+0.25)
+            rx0, ry0, rx1, ry1 = px-0.25, py-0.25, px+0.25, py+0.25
             path_pil.append(f"M {rx0} {ry0} L {rx1} {ry0} L {rx1} {ry1} L {rx0} {ry1} Z")
 
         if path_free: fig_2d.add_shape(type="path", path=" ".join(path_free), fillcolor="#ecf0f1", line=dict(color="#bdc3c7", width=1))
