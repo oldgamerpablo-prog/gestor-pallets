@@ -719,82 +719,106 @@ def mostrar_cubicadora():
         
         lista_skus_all = df_f[MAPA["sku"]].astype(str).str.upper().unique().tolist()
         
-        c_s1, c_s2 = st.columns(2)
-        with c_s1:
-            sel_list = st.multiselect("Seleccionar individualmente:", options=lista_skus_all, default=[s for s in st.session_state.skus_activos if s in lista_skus_all])
-        with c_s2:
-            txt_list = st.text_area("O pegar lista desde Excel (SKUs separados por espacio o saltos de línea):", height=68)
-            
-        c_btn1, c_btn2, c_tog = st.columns([1, 1, 2])
-        with c_tog:
-            mostrar_graf = st.toggle("🖼️ Generar Renders 2D/3D (Apagar para obtener resultados numéricos instantáneos)", value=False)
-        with c_btn1:
-            if st.button("🚀 Calcular Selección", type="primary", use_container_width=True):
+        opcion_vis = st.radio("Método de Visualización:", ["Elegir de la lista", "Pegar lista (Excel)", "Ver primeros 10", "Ver TODOS"], horizontal=True)
+        
+        skus_a_procesar = []
+        if opcion_vis == "Elegir de la lista":
+            default_sel = [lista_skus_all[0]] if (lista_skus_all and not st.session_state.skus_activos) else [s for s in st.session_state.skus_activos if s in lista_skus_all]
+            if not default_sel and lista_skus_all: default_sel = [lista_skus_all[0]]
+            skus_a_procesar = st.multiselect("Seleccionar SKUs individualmente:", options=lista_skus_all, default=default_sel)
+        elif opcion_vis == "Pegar lista (Excel)":
+            txt_list = st.text_area("Pega aquí la columna copiada de Excel (SKUs separados por espacio, coma o salto de línea):", height=80)
+            if txt_list:
                 extraidos = [s.strip().upper() for s in re.split(r'[,\s;\n]+', txt_list) if s.strip()]
-                combinados = list(set(sel_list + extraidos))
-                validos = [s for s in combinados if s in lista_skus_all]
-                invalidos = [s for s in combinados if s not in lista_skus_all]
-                
-                st.session_state.skus_activos = validos
-                st.session_state.skus_invalidos = invalidos
-                st.rerun()
-        with c_btn2:
-            if st.button("🧹 Limpiar Filtros", use_container_width=True):
-                st.session_state.skus_activos = []
-                st.session_state.skus_invalidos = []
-                st.rerun()
+                skus_a_procesar = [s for s in extraidos if s in lista_skus_all]
+                invalidos = [s for s in extraidos if s not in lista_skus_all]
+                if invalidos:
+                    st.warning(f"⚠️ Los siguientes SKUs no se encontraron en la base (o están filtrados): {', '.join(invalidos)}")
+        elif opcion_vis == "Ver primeros 10":
+            skus_a_procesar = lista_skus_all[:10]
+        elif opcion_vis == "Ver TODOS":
+            skus_a_procesar = lista_skus_all
 
-        if st.session_state.get('skus_invalidos'):
-            st.warning(f"⚠️ Los siguientes SKUs no se encontraron en la base (o están filtrados por ABC/XYZ): {', '.join(st.session_state.skus_invalidos)}")
+        st.session_state.skus_activos = skus_a_procesar
 
+        st.markdown("<br>", unsafe_allow_html=True)
+        mostrar_graf = st.toggle("🖼️ Mostrar Planos 2D / 3D (Desactiva esta opción para obtener mayor velocidad en búsquedas masivas)", value=True)
+
+        # Dataset activo para métricas
         if st.session_state.skus_activos:
             df_kpi = df_f[df_f[MAPA['sku']].astype(str).str.upper().isin(st.session_state.skus_activos)]
-            st.success(f"✅ Mostrando métricas calculadas para {len(df_kpi)} SKUs seleccionados.")
         else:
             df_kpi = df_f
-            st.info("ℹ️ Mostrando métricas globales de toda la bodega. Utiliza el buscador para analizar un listado específico.")
 
-        # Calculo de KPIs exactos
+        # Cálculo exacto a Colab
         tot_sku_kpi = len(df_kpi)
         con_stock_kpi = int((pd.to_numeric(df_kpi[MAPA["stock"]], errors="coerce").fillna(0) > 0).sum())
         tot_pallets_kpi = sum([calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"] for _, row in df_kpi.iterrows()])
         
-        # Conteo de Alertas exactas Colab
         alertas_activas_kpi = 0
         for _, row in df_kpi.iterrows():
             m_a = calcular_metricas_dinamicas(row, MAPA, modo)
             if "EXCEL" in m_a["Estado"] or "PELIGRO" in m_a["Estado"] or "REVISAR" in m_a["Estado"]:
                 alertas_activas_kpi += 1
 
-        # DASHBOARD DARK ESTILO COLAB
+        # DASHBOARD DE KPI LIMPIO Y REFINADO
         modo_txt = "MODO EXCEL (VALORES MANUALES)" if modo == "EXCEL" else "MODO OPTIMIZADO (MÁXIMA FÍSICA)"
         color_modo = "#3b82f6" if modo == "EXCEL" else "#f59e0b"
         
         st.markdown(f"""
-        <div style="font-family: 'Segoe UI', sans-serif; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08); margin-bottom: 25px;">
-            <div style="background: #1e293b; padding: 20px 25px; border-radius: 12px 12px 0 0; display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <h2 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 700;">WMS Analytics: Dashboard Paletizado</h2>
-                    <p style="color: #94a3b8; margin: 4px 0 0 0; font-size: 12px;">Estado: <b style="color:{color_modo};">{modo_txt}</b></p>
-                </div>
-                <div><span style="background: {color_modo}; color: white; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; letter-spacing: 1px;">{modo}</span></div>
+        <div style="font-family: 'Segoe UI', system-ui, sans-serif; background: #0f172a; border-radius: 12px 12px 0 0; padding: 18px 25px; display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+            <div>
+                <h3 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.5px;">WMS Analytics: Dashboard Paletizado</h3>
+                <p style="color: #94a3b8; margin: 3px 0 0 0; font-size: 12px;">Estado: <b style="color:{color_modo};">{modo_txt}</b></p>
             </div>
-            <div style="padding: 20px 25px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
-                <div class="kpi-box" style="border-left: 4px solid #3b82f6;"><div class="kpi-title">TOTAL SKU (FILTRADO)</div><div class="kpi-value" style="color:#1e293b;">{tot_sku_kpi:,}</div></div>
-                <div class="kpi-box" style="border-left: 4px solid #10b981;"><div class="kpi-title">CON STOCK</div><div class="kpi-value" style="color:#1e293b;">{con_stock_kpi:,}</div></div>
-                <div class="kpi-box" style="border-left: 4px solid #6366f1; background:#f5f3ff;"><div class="kpi-title">PALLETS REQ.</div><div class="kpi-value" style="color:#4f46e5;">{tot_pallets_kpi:,}</div></div>
-                <div class="kpi-box" style="border-left: 4px solid #8b5cf6; background:#f5f3ff;"><div class="kpi-title">POSICIONES</div><div class="kpi-value" style="color:#7c3aed;">{tot_pallets_kpi:,}</div></div>
-                <div class="kpi-box" style="border-left: 4px solid #ef4444; background:#fef2f2;"><div class="kpi-title">ALERTAS ACTIVAS</div><div class="kpi-value" style="color:#dc2626;">{alertas_activas_kpi:,}</div></div>
-            </div>
+            <div><span style="background: {color_modo}; color: white; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; letter-spacing: 0.5px;">{modo}</span></div>
         </div>
         """, unsafe_allow_html=True)
+
+        k1, k2, k3, k4, k5 = st.columns(5)
+        with k1:
+            st.markdown(f"""
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #3b82f6; border-radius: 0 0 0 8px; padding: 14px 16px; margin-bottom: 20px;">
+                <div style="font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: 0.5px; margin-bottom: 4px;">TOTAL SKU (FILTRADO)</div>
+                <div style="font-size: 22px; font-weight: 800; color: #0f172a;">{tot_sku_kpi:,}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with k2:
+            st.markdown(f"""
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #10b981; padding: 14px 16px; margin-bottom: 20px;">
+                <div style="font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: 0.5px; margin-bottom: 4px;">CON STOCK</div>
+                <div style="font-size: 22px; font-weight: 800; color: #0f172a;">{con_stock_kpi:,}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with k3:
+            st.markdown(f"""
+            <div style="background: #f5f3ff; border: 1px solid #ddd6fe; border-left: 4px solid #6366f1; padding: 14px 16px; margin-bottom: 20px;">
+                <div style="font-size: 10px; font-weight: 800; color: #4338ca; letter-spacing: 0.5px; margin-bottom: 4px;">PALLETS REQ.</div>
+                <div style="font-size: 22px; font-weight: 800; color: #4f46e5;">{tot_pallets_kpi:,}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with k4:
+            st.markdown(f"""
+            <div style="background: #f5f3ff; border: 1px solid #ddd6fe; border-left: 4px solid #8b5cf6; padding: 14px 16px; margin-bottom: 20px;">
+                <div style="font-size: 10px; font-weight: 800; color: #5b21b6; letter-spacing: 0.5px; margin-bottom: 4px;">POSICIONES</div>
+                <div style="font-size: 22px; font-weight: 800; color: #7c3aed;">{tot_pallets_kpi:,}</div>
+            </div>
+            """, unsafe_allow_html=True)
+        with k5:
+            color_alert = "#dc2626" if alertas_activas_kpi > 0 else "#10b981"
+            st.markdown(f"""
+            <div style="background: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid #ef4444; border-radius: 0 0 8px 0; padding: 14px 16px; margin-bottom: 20px;">
+                <div style="font-size: 10px; font-weight: 800; color: #991b1b; letter-spacing: 0.5px; margin-bottom: 4px;">ALERTAS ACTIVAS</div>
+                <div style="font-size: 22px; font-weight: 800; color: {color_alert};">{alertas_activas_kpi:,}</div>
+            </div>
+            """, unsafe_allow_html=True)
 
         st.markdown("---")
         tab_buscar, tab_descargar, tab_alertas, tab_datos = st.tabs(["🔍 Resultados Detallados", "📥 Descargar Reporte", "🚨 Ver Alertas", "📊 Base de Datos"])
 
         with tab_buscar:
             if not st.session_state.skus_activos:
-                st.markdown("<div style='text-align:center; padding: 30px; color:#64748b;'><h4>Ingresa SKUs en el buscador masivo de arriba y haz clic en 'Calcular Selección' para desglosar productos específicos.</h4></div>", unsafe_allow_html=True)
+                st.markdown("<div style='text-align:center; padding: 30px; color:#64748b;'><h4>No hay SKUs seleccionados. Selecciona opciones en el buscador arriba.</h4></div>", unsafe_allow_html=True)
             else:
                 for sku in st.session_state.skus_activos:
                     filtro = df_kpi[df_kpi[MAPA["sku"]].astype(str).str.upper() == sku]
@@ -1037,7 +1061,6 @@ def mostrar_layout():
         st.markdown("---")
         res = st.session_state.res_layout_actual
         
-        # BARRA DE HERRAMIENTAS Y EXPORTACIÓN WMS
         col_exp1, col_exp2 = st.columns([1, 1])
         with col_exp1:
             st.session_state.modo_vista_color = st.selectbox("🎨 Zonificación de Colores Racks:", ['3 Zonas (ABC)', '9 Zonas (ABC-XYZ)'], index=['3 Zonas (ABC)', '9 Zonas (ABC-XYZ)'].index(st.session_state.modo_vista_color))
@@ -1046,7 +1069,6 @@ def mostrar_layout():
             wms_excel = generar_wms_excel(df_orig if st.session_state.fuente_datos == 'Data Original' else df_res, res['almacen'], MAPA)
             st.download_button("💾 Exportar Ubicaciones WMS (Excel)", data=wms_excel, file_name="WMS_Ubicaciones_Bodega.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
-        # PLOTLY 2D DIBUJO AJUSTADO EXACTO A COLAB
         l_m, a_m, w_puerta, flujo = st.session_state.l_bod, st.session_state.a_bod, st.session_state.ancho_porton, st.session_state.tipo_flujo
         fig_2d = go.Figure()
         fig_2d.add_shape(type="rect", x0=0, y0=0, x1=l_m, y1=a_m, line=dict(color="#2c3e50", width=4), fillcolor="#fafafa")
@@ -1115,7 +1137,6 @@ def mostrar_layout():
             fig_2d.add_shape(type="rect", x0=x0, y0=y0, x1=x1, y1=y1, fillcolor="#f1c40f", line=dict(color="#f39c12", width=2))
             fig_2d.add_annotation(x=ax, y=ay, text=f"<b>{label}</b>", showarrow=False, font=dict(size=11, color="black"))
 
-        # FIX DE EJES PARA EVITAR QUE SE ENCOJA LA IMAGEN
         fig_2d.update_layout(
             title="Plano CAD 2D del Centro de Distribución (Zonificación Racks)",
             xaxis=dict(title="Largo (m)", range=[-3, l_m + 3], zeroline=False),
@@ -1242,7 +1263,7 @@ st.session_state.menu_seleccion = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v6.4 • Full Parity")
+st.sidebar.caption("WMS Analytics Hub v6.5 • Refined Design")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
