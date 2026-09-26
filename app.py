@@ -180,7 +180,7 @@ def calcular_metricas_dinamicas(fila, mapa, modo="EXCEL"):
     if stock <= 0: estado = "SIN STOCK"
     elif cap_usada <= 0: estado = "REVISAR DATOS"
     elif es_numero(peso_pal) and peso_pal > MAX_PESO_PALLET: estado = "⚠️ PELIGRO: SOBREPESO (>1200kg)"
-    elif modo == "EXCEL" and abs((cap_op - cap_ex) if es_numero(cap_ex) else 0) > 0: estado = f"⚠️ EXCEL: {int(cap_ex)}u | ÓPTIMO: {cap_optima}u"
+    elif modo == "EXCEL" and abs((cap_op - cap_ex) if es_numero(cap_ex) else 0) > 0: estado = f"⚠️ EXCEL: {int(cap_ex)}u | ÓPTIMO: {cap_op}u"
 
     return {"Capacidad_Usada": cap_usada, "Pallets": pallets, "Unidades_Ultimo": ult_unids, "Ocupacion_Ultimo": (ult_unids / cap_usada * 100) if cap_usada > 0 else 0, "Peso_Pallet": peso_pal, "Estado": estado, "Cap_Excel": cap_ex, "Cap_Optima": cap_op, "Eficiencia_Volumen": efi_vol, "Pallets_Completos": pallets_comp, "Unidades_Sobrante": u_sob, "Stock": stock}
 
@@ -249,7 +249,7 @@ def html_vista_lateral(fila, mapa, cap_usada, total_unidades=None):
     bloques = [f"<div class='box-3d' style='position:absolute; left:{i*cw:.2f}px; bottom:{hp*ey + n*ch:.2f}px; width:{cw-1:.2f}px; height:{ch-1:.2f}px; box-sizing:border-box; background:{mat['bg_side']}; border:1px solid {mat['border']}; border-radius:{mat['radius']}; box-shadow:inset 1px 1px 2px rgba(255,255,255,0.2), 2px 2px 4px rgba(0,0,0,0.3);'></div>" for n in range(niv_c) for i in range(cols)]
     c_top = len([c for c in lay["cajas"][:u_sob] if abs(c["y"]) < 1e-5]) if u_sob > 0 else 0
     bloques += [f"<div class='box-3d' style='position:absolute; left:{i*cw:.2f}px; bottom:{hp*ey + niv_c*ch:.2f}px; width:{cw-1:.2f}px; height:{ch-1:.2f}px; box-sizing:border-box; background:{mat['bg_side']}; border:1px solid {mat['border']}; border-radius:{mat['radius']}; box-shadow:inset 1px 1px 2px rgba(255,255,255,0.2), 2px 2px 4px rgba(0,0,0,0.3);'></div>" for i in range(c_top if c_top > 0 else (1 if u_sob > 0 else 0))]
-    return f"<div style='position:relative; width:{lp*ex + 40:.2f}px; height:{alto_v*ey + 30:.2f}px; margin: 10px auto;'><div class='cota-linea-v' style='bottom: 0; left: 0; width: 10px; height: {alto_v*ey}px;'><span class='cota-texto' style='transform: rotate(-90deg); white-space:nowrap;'>{fmt(alto_v,0)} cm</span></div><div style='position:absolute; left:25px; bottom:0; width:{lp*ex:.2f}px; height:{alto_v*ey:.2f}px;'><div style='position:absolute; left:0; bottom:0; width:{lp*ex:.2f}px; height:{hp*ey:.2f}px; background:#b88252; border:1px solid #754b28; border-radius:2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3);'><div style='position:absolute; left:18%; bottom:15%; width:22%; height:70%; background:#2c1b12; border-radius:2px;'></div><div style='position:absolute; right:18%; bottom:15%; width:22%; height:70%; background:#2c1b12; border-radius:2px;'></div></div>{''.join(bloques)}<div style='position:absolute; left:0; bottom:{alto_v*ey:.2f}px; width:110%; border-top:2px dashed #ef4444; z-index:20;'></div><div style='position:absolute; right:-25px; bottom:{alto_v*ey-10:.2f}px; font-size:10px; color:#ef4444; font-weight:700;'>MÁX</div></div></div>"
+    return f"<div style='position:relative; width:{lp*ex + 40:.2f}px; height:{alto_v*ey + 30:.2f}px; margin: 10px auto;'><div class='cota-linea-v' style='bottom: 0; left: 0; width: 10px; height: {h}px;'><span class='cota-texto' style='transform: rotate(-90deg); white-space:nowrap;'>{fmt(alto_v,0)} cm</span></div><div style='position:absolute; left:25px; bottom:0; width:{lp*ex:.2f}px; height:{alto_v*ey:.2f}px;'><div style='position:absolute; left:0; bottom:0; width:{lp*ex:.2f}px; height:{hp*ey:.2f}px; background:#b88252; border:1px solid #754b28; border-radius:2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3);'><div style='position:absolute; left:18%; bottom:15%; width:22%; height:70%; background:#2c1b12; border-radius:2px;'></div><div style='position:absolute; right:18%; bottom:15%; width:22%; height:70%; background:#2c1b12; border-radius:2px;'></div></div>{''.join(bloques)}<div style='position:absolute; left:0; bottom:{alto_v*ey:.2f}px; width:110%; border-top:2px dashed #ef4444; z-index:20;'></div><div style='position:absolute; right:-25px; bottom:{alto_v*ey-10:.2f}px; font-size:10px; color:#ef4444; font-weight:700;'>MÁX</div></div></div>"
 
 class MallaAgrupada:
     def __init__(self, color, nombre, opacidad=1.0):
@@ -427,8 +427,10 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas,
         if slot['ocupado']:
             ac, es, ec = max(0.1, slot['alt_p'] - 0.12), slot.get('es_saldo', False), slot.get('es_cilindro', False)
             th = f"<b>[{slot['id_posicion']}]</b><br>SKU: {slot['sku']}<br>Alto: {ac:.2f}m" + (" <b style='color:#e74c3c;'>(SALDO)</b>" if es else "")
+            
             if skus_buscados: cc, cm = (c_s['Destacado'] if es else c_f['Destacado'], c_mad) if slot['sku'] in skus_buscados else (c_s['Apagado'] if es else c_f['Apagado'], c_mada)
             else: cm, cc = c_mad, (c_s if es else c_f).get(slot['abc_xyz'] if '9 Zonas' in modo_vista else slot['abc'], (c_s if es else c_f).get('C' if '3 Zonas' in modo_vista else 'CZ'))
+                
             add_cube_rotated(cm, slot['x_pal'], slot['y'] + 0.05, slot['z'] + 0.02, res['ap_w'], res['pp_d'] - 0.1, 0.12, is_vertical)
             rx, ry = (slot['y'] + 0.05, slot['x_pal'] + 0.05) if is_vertical else (slot['x_pal'] + 0.05, slot['y'] + 0.05)
             wc, dc = (res['pp_d'] - 0.1, res['ap_w'] - 0.1) if is_vertical else (res['ap_w'] - 0.1, res['pp_d'] - 0.2)
@@ -966,7 +968,7 @@ def mostrar_outbound():
 menu_opciones = ["🏠 Portada Principal", "📦 Cubicadora WMS", "🏗️ Layout de Bodega", "📊 Analytics & Reportería", "📥 Entrada Mercadería", "📤 Salida Mercadería"]
 st.session_state.menu_seleccion = st.sidebar.radio("Navegación", menu_opciones, index=menu_opciones.index(st.session_state.menu_seleccion))
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v8.8 • Core Fixes")
+st.sidebar.caption("WMS Analytics Hub v8.9 • Final Production")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
