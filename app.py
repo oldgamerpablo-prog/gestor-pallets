@@ -249,7 +249,7 @@ def html_vista_lateral(fila, mapa, cap_usada, total_unidades=None):
     bloques = [f"<div class='box-3d' style='position:absolute; left:{i*cw:.2f}px; bottom:{hp*ey + n*ch:.2f}px; width:{cw-1:.2f}px; height:{ch-1:.2f}px; box-sizing:border-box; background:{mat['bg_side']}; border:1px solid {mat['border']}; border-radius:{mat['radius']}; box-shadow:inset 1px 1px 2px rgba(255,255,255,0.2), 2px 2px 4px rgba(0,0,0,0.3);'></div>" for n in range(niv_c) for i in range(cols)]
     c_top = len([c for c in lay["cajas"][:u_sob] if abs(c["y"]) < 1e-5]) if u_sob > 0 else 0
     bloques += [f"<div class='box-3d' style='position:absolute; left:{i*cw:.2f}px; bottom:{hp*ey + niv_c*ch:.2f}px; width:{cw-1:.2f}px; height:{ch-1:.2f}px; box-sizing:border-box; background:{mat['bg_side']}; border:1px solid {mat['border']}; border-radius:{mat['radius']}; box-shadow:inset 1px 1px 2px rgba(255,255,255,0.2), 2px 2px 4px rgba(0,0,0,0.3);'></div>" for i in range(c_top if c_top > 0 else (1 if u_sob > 0 else 0))]
-    return f"<div style='position:relative; width:{lp*ex + 40:.2f}px; height:{alto_v*ey + 30:.2f}px; margin: 10px auto;'><div class='cota-linea-v' style='bottom: 0; left: 0; width: 10px; height: {h}px;'><span class='cota-texto' style='transform: rotate(-90deg); white-space:nowrap;'>{fmt(alto_v,0)} cm</span></div><div style='position:absolute; left:25px; bottom:0; width:{lp*ex:.2f}px; height:{alto_v*ey:.2f}px;'><div style='position:absolute; left:0; bottom:0; width:{lp*ex:.2f}px; height:{hp*ey:.2f}px; background:#b88252; border:1px solid #754b28; border-radius:2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3);'><div style='position:absolute; left:18%; bottom:15%; width:22%; height:70%; background:#2c1b12; border-radius:2px;'></div><div style='position:absolute; right:18%; bottom:15%; width:22%; height:70%; background:#2c1b12; border-radius:2px;'></div></div>{''.join(bloques)}<div style='position:absolute; left:0; bottom:{alto_v*ey:.2f}px; width:110%; border-top:2px dashed #ef4444; z-index:20;'></div><div style='position:absolute; right:-25px; bottom:{alto_v*ey-10:.2f}px; font-size:10px; color:#ef4444; font-weight:700;'>MÁX</div></div></div>"
+    return f"<div style='position:relative; width:{lp*ex + 40:.2f}px; height:{alto_v*ey + 30:.2f}px; margin: 10px auto;'><div class='cota-linea-v' style='bottom: 0; left: 0; width: 10px; height: {alto_v*ey}px;'><span class='cota-texto' style='transform: rotate(-90deg); white-space:nowrap;'>{fmt(alto_v,0)} cm</span></div><div style='position:absolute; left:25px; bottom:0; width:{lp*ex:.2f}px; height:{alto_v*ey:.2f}px;'><div style='position:absolute; left:0; bottom:0; width:{lp*ex:.2f}px; height:{hp*ey:.2f}px; background:#b88252; border:1px solid #754b28; border-radius:2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3);'><div style='position:absolute; left:18%; bottom:15%; width:22%; height:70%; background:#2c1b12; border-radius:2px;'></div><div style='position:absolute; right:18%; bottom:15%; width:22%; height:70%; background:#2c1b12; border-radius:2px;'></div></div>{''.join(bloques)}<div style='position:absolute; left:0; bottom:{alto_v*ey:.2f}px; width:110%; border-top:2px dashed #ef4444; z-index:20;'></div><div style='position:absolute; right:-25px; bottom:{alto_v*ey-10:.2f}px; font-size:10px; color:#ef4444; font-weight:700;'>MÁX</div></div></div>"
 
 class MallaAgrupada:
     def __init__(self, color, nombre, opacidad=1.0):
@@ -347,12 +347,8 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     dyr, ny = (a_m / (cy + 1), cy) if cy > 0 else (dp_y, math.floor(a_m / dp_y) if dp_y > 0 else 0)
     pil_r = [(px * dxr, py * dyr) for px in range(1, nx + 1) for py in range(1, ny + 1)]
     v_pil = [(py, px) for px, py in pil_r] if is_vertical else pil_r
-    
-    if 'ABC_XYZ' in df_activa.columns: df_activa = df_activa.sort_values(by='ABC_XYZ')
 
-    ofi = [{'x': conf['ofi_pos_x'], 'y': conf['ofi_pos_y'], 'w': conf['ofi_largo'], 'd': conf['ofi_ancho'], 'h': conf['ofi_alto']}] if conf['ofi_largo'] > 0 else []
     m_v, m_l, alm = 0, [], []
-    
     for f in range(filas):
         l_pas = chr(64 + f + 1) if f+1 <= 26 else f"P{f+1}"
         yr1, yr2 = (f * a_b) + 2.0, (f * a_b) + 2.0 + pp_d
@@ -363,7 +359,7 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
                 n_m = (s * m_x_s) + m + 1
                 for yr in [yr1, yr2]:
                     rx1, ry1, rx2, ry2 = (yr, xp, yr+pp_d, xp+l_mod) if is_vertical else (xp, yr, xp+l_mod, yr+pp_d)
-                    if any(not (rx2+1.5<o['x'] or rx1-1.5>o['x']+o['w'] or ry2+1.5<o['y'] or ry1-1.5>o['y']+o['d']) for o in ofi) or any(not (rx2<z['x1'] or rx1>z['x2'] or ry2<z['y1'] or ry1>z['y2']) for z in sz): continue
+                    if any(not (rx2+1.5<o['x'] or rx1-1.5>o['x']+o['w'] or ry2+1.5<o['y'] or ry1-1.5>o['y']+o['d']) for o in conf.get('oficinas', [])) or any(not (rx2<z['x1'] or rx1>z['x2'] or ry2<z['y1'] or ry1>z['y2']) for z in sz): continue
                     b_p = any(xp <= px <= xp + l_mod and yr - 0.25 <= py <= yr + pp_d + 0.25 for px, py in v_pil)
                     m_l.append({'x': xp, 'y': yr, 'bloqueado': b_p})
                     if not b_p: 
@@ -386,7 +382,7 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
                 u += 1
         r_ub.append({'Ubicadas': u})
 
-    return {'modulos': m_v, 'niveles': niv, 'capacidad': len(alm), 'demanda': int(df_activa['Cantidad_Pallets'].sum()), 'diferencia': len(alm) - int(df_activa['Cantidad_Pallets'].sum()), 'staging': sz, 'oficinas': ofi, 'modulos_list': m_l, 'almacen': alm, 'pilares_reales': pil_r, 'pallets_ubicados_totales': sum(r['Ubicadas'] for r in r_ub), 'alt_nivel_viga': a_n_v, 'l_modulo': l_mod, 't_marco': t_m, 'pp_d': pp_d, 'ap_w': ap_w, 'viga_h': 0.12, 'is_vertical': is_vertical}
+    return {'modulos': m_v, 'niveles': niv, 'capacidad': len(alm), 'demanda': int(df_activa['Cantidad_Pallets'].sum()), 'diferencia': len(alm) - int(df_activa['Cantidad_Pallets'].sum()), 'staging': sz, 'oficinas': conf.get('oficinas', []), 'modulos_list': m_l, 'almacen': alm, 'pilares_reales': pil_r, 'pallets_ubicados_totales': sum(r['Ubicadas'] for r in r_ub), 'alt_nivel_viga': a_n_v, 'l_modulo': l_mod, 't_marco': t_m, 'pp_d': pp_d, 'ap_w': ap_w, 'viga_h': 0.12, 'is_vertical': is_vertical}
 
 def add_cube_rotated(capa, x0, y0, z0, dx, dy, dz, is_vertical, hover_txt=None):
     if is_vertical: capa.agregar_cubo(y0, x0, z0, dy, dx, dz, hover_txt)
@@ -427,10 +423,8 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas,
         if slot['ocupado']:
             ac, es, ec = max(0.1, slot['alt_p'] - 0.12), slot.get('es_saldo', False), slot.get('es_cilindro', False)
             th = f"<b>[{slot['id_posicion']}]</b><br>SKU: {slot['sku']}<br>Alto: {ac:.2f}m" + (" <b style='color:#e74c3c;'>(SALDO)</b>" if es else "")
-            
             if skus_buscados: cc, cm = (c_s['Destacado'] if es else c_f['Destacado'], c_mad) if slot['sku'] in skus_buscados else (c_s['Apagado'] if es else c_f['Apagado'], c_mada)
             else: cm, cc = c_mad, (c_s if es else c_f).get(slot['abc_xyz'] if '9 Zonas' in modo_vista else slot['abc'], (c_s if es else c_f).get('C' if '3 Zonas' in modo_vista else 'CZ'))
-                
             add_cube_rotated(cm, slot['x_pal'], slot['y'] + 0.05, slot['z'] + 0.02, res['ap_w'], res['pp_d'] - 0.1, 0.12, is_vertical)
             rx, ry = (slot['y'] + 0.05, slot['x_pal'] + 0.05) if is_vertical else (slot['x_pal'] + 0.05, slot['y'] + 0.05)
             wc, dc = (res['pp_d'] - 0.1, res['ap_w'] - 0.1) if is_vertical else (res['ap_w'] - 0.1, res['pp_d'] - 0.2)
@@ -679,7 +673,6 @@ def mostrar_layout():
         return
 
     MAPA = st.session_state.mapa_columnas
-    
     df_layout_orig = preparar_df_layout(st.session_state.df_resultados.copy(), MAPA, "EXCEL")
     df_layout_opt = preparar_df_layout(st.session_state.df_resultados.copy(), MAPA, "OPTIMO")
     dict_demanda = {'Data Original': df_layout_orig, 'Data Optimizada': df_layout_opt}
@@ -888,6 +881,8 @@ def mostrar_layout():
         
         if mostrar_3d_layout:
             with st.spinner("Construyendo Mallas 3D de la Bodega..."):
+                raw_sub = st.session_state.filtro_sublayout.strip()
+                skus_b = set(s.strip().upper() for s in re.split(r'[,\s;]+', raw_sub) if s.strip()) if getattr(st.session_state, 'modo_layout_eval', 'todos') == 'filtro' else set()
                 st.plotly_chart(generar_layout_3d(res, l_m, a_m, st.session_state.alt_bod, res['is_vertical'], skus_b, puertas, st.session_state.modo_vista_color), use_container_width=True)
 
 def mostrar_analytics():
@@ -968,7 +963,7 @@ def mostrar_outbound():
 menu_opciones = ["🏠 Portada Principal", "📦 Cubicadora WMS", "🏗️ Layout de Bodega", "📊 Analytics & Reportería", "📥 Entrada Mercadería", "📤 Salida Mercadería"]
 st.session_state.menu_seleccion = st.sidebar.radio("Navegación", menu_opciones, index=menu_opciones.index(st.session_state.menu_seleccion))
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v8.9 • Final Production")
+st.sidebar.caption("WMS Analytics Hub v9.0 • Clean AI Renderer")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
