@@ -394,6 +394,47 @@ def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
 # ============================================================
 # 4. MOTOR DE CÁLCULO LAYOUT 3D 
 # ============================================================
+def preparar_df_layout(df_base, mapa, modo):
+    df_l = pd.DataFrame()
+    df_l['SKU'] = df_base[mapa['sku']]
+    
+    metrics = [calcular_metricas_dinamicas(row, mapa, modo) for _, row in df_base.iterrows()]
+    df_l['Cantidad_Pallets'] = [m['Pallets'] for m in metrics]
+    df_l['Peso_Pallet_kg'] = [m['Peso_Pallet'] for m in metrics]
+    df_l['Pallets_Completos_Optimo'] = [m['Pallets_Completos'] for m in metrics]
+    df_l['Unidades_Sobrante_Optimo'] = [m['Unidades_Sobrante'] for m in metrics]
+    df_l['Capacidad_Optima'] = [m['Cap_Optima'] for m in metrics]
+    
+    col_alto_tot = mapa.get('altura_total')
+    if col_alto_tot:
+        df_l['Alto_m'] = pd.to_numeric(df_base[col_alto_tot], errors='coerce').fillna(120) / 100.0
+    else:
+        df_l['Alto_m'] = 1.2
+        
+    col_abc = mapa.get('abc')
+    col_xyz = mapa.get('xyz')
+    col_abcxyz = mapa.get('abc_xyz')
+    col_formato = mapa.get('formato')
+    
+    df_l['ABC'] = df_base[col_abc].fillna('C').astype(str).str.strip().str.upper() if col_abc else 'C'
+    df_l['XYZ'] = df_base[col_xyz].fillna('Z').astype(str).str.strip().str.upper() if col_xyz else 'Z'
+    df_l['ABC'] = df_l['ABC'].replace({'N/D': 'C', 'NAN': 'C', 'NONE': 'C', '': 'C'})
+    df_l['XYZ'] = df_l['XYZ'].replace({'N/D': 'Z', 'NAN': 'Z', 'NONE': 'Z', '': 'Z'})
+    
+    if col_abcxyz and col_abcxyz in df_base.columns:
+        df_l['ABC_XYZ'] = df_base[col_abcxyz].fillna(df_l['ABC'] + df_l['XYZ']).astype(str).str.strip().str.upper()
+    else:
+        df_l['ABC_XYZ'] = df_l['ABC'] + df_l['XYZ']
+    
+    df_l['ABC_XYZ'] = df_l['ABC_XYZ'].replace({'N/D': 'CZ', 'N/DN/D': 'CZ', 'NAN': 'CZ'})
+    
+    cat_type = pd.CategoricalDtype(categories=['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ'], ordered=True)
+    df_l['ABC_XYZ'] = df_l['ABC_XYZ'].astype(cat_type)
+    
+    df_l['Formato'] = df_base[col_formato] if col_formato else 'N/D'
+    
+    return df_l[df_l['Cantidad_Pallets'] > 0].sort_values(by='ABC_XYZ').reset_index(drop=True)
+
 def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     l_m, a_m, alt_m = conf['l_bod'], conf['a_bod'], conf['alt_bod']
     w_p, flujo = conf['ancho_porton'], conf['tipo_flujo']
@@ -423,11 +464,6 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     dp_y_real, ny = (a_m / (cy + 1), cy) if cy > 0 else (dp_y, math.floor(a_m / dp_y) if dp_y > 0 else 0)
     pilares_reales = [(px * dp_x_real, py * dp_y_real) for px in range(1, nx + 1) for py in range(1, ny + 1)]
     virt_pilares = [(py, px) for px, py in pilares_reales] if is_vertical else pilares_reales
-    
-    if 'ABC_XYZ' in df_activa.columns:
-        cat_type = pd.CategoricalDtype(categories=['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ'], ordered=True)
-        df_activa['ABC_XYZ'] = df_activa['ABC_XYZ'].astype(cat_type)
-        df_activa = df_activa.sort_values(by='ABC_XYZ')
 
     modulos_validos = 0
     modulos_list = []
@@ -470,7 +506,6 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     almacen.sort(key=lambda x: (x['letra_pasillo'], x['nivel'], x['x'], x['y']))
     resumen_ubicacion = []
     
-    # 🧠 ALGORITMO DE SLOTTING: SALDOS Y FORMAS
     for _, row in df_activa.iterrows():
         sku, cant = str(row['SKU']).strip().upper(), int(row['Cantidad_Pallets'])
         abc_c = str(row.get('ABC', 'C'))
@@ -479,7 +514,6 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
         peso_real_pallet = float(row.get('Peso_Pallet_kg', 0))
         forzar_nivel_1 = (peso_real_pallet > limite_peso_grua)
 
-        # Detección de Cilindros y Saldos
         es_cilindrico = False
         if 'Formato' in row and pd.notna(row['Formato']):
             f_str = str(row['Formato']).lower()
@@ -1088,6 +1122,47 @@ def mostrar_cubicadora():
         with tab_datos: st.dataframe(df_f, use_container_width=True)
     else: st.info("👆 Sube tu archivo Excel para comenzar.")
 
+def preparar_df_layout(df_base, mapa, modo):
+    df_l = pd.DataFrame()
+    df_l['SKU'] = df_base[mapa['sku']]
+    
+    metrics = [calcular_metricas_dinamicas(row, mapa, modo) for _, row in df_base.iterrows()]
+    df_l['Cantidad_Pallets'] = [m['Pallets'] for m in metrics]
+    df_l['Peso_Pallet_kg'] = [m['Peso_Pallet'] for m in metrics]
+    df_l['Pallets_Completos_Optimo'] = [m['Pallets_Completos'] for m in metrics]
+    df_l['Unidades_Sobrante_Optimo'] = [m['Unidades_Sobrante'] for m in metrics]
+    df_l['Capacidad_Optima'] = [m['Cap_Optima'] for m in metrics]
+    
+    col_alto_tot = mapa.get('altura_total')
+    if col_alto_tot:
+        df_l['Alto_m'] = pd.to_numeric(df_base[col_alto_tot], errors='coerce').fillna(120) / 100.0
+    else:
+        df_l['Alto_m'] = 1.2
+        
+    col_abc = mapa.get('abc')
+    col_xyz = mapa.get('xyz')
+    col_abcxyz = mapa.get('abc_xyz')
+    col_formato = mapa.get('formato')
+    
+    df_l['ABC'] = df_base[col_abc].fillna('C').astype(str).str.strip().str.upper() if col_abc else 'C'
+    df_l['XYZ'] = df_base[col_xyz].fillna('Z').astype(str).str.strip().str.upper() if col_xyz else 'Z'
+    df_l['ABC'] = df_l['ABC'].replace({'N/D': 'C', 'NAN': 'C', 'NONE': 'C', '': 'C'})
+    df_l['XYZ'] = df_l['XYZ'].replace({'N/D': 'Z', 'NAN': 'Z', 'NONE': 'Z', '': 'Z'})
+    
+    if col_abcxyz and col_abcxyz in df_base.columns:
+        df_l['ABC_XYZ'] = df_base[col_abcxyz].fillna(df_l['ABC'] + df_l['XYZ']).astype(str).str.strip().str.upper()
+    else:
+        df_l['ABC_XYZ'] = df_l['ABC'] + df_l['XYZ']
+    
+    df_l['ABC_XYZ'] = df_l['ABC_XYZ'].replace({'N/D': 'CZ', 'N/DN/D': 'CZ', 'NAN': 'CZ'})
+    
+    cat_type = pd.CategoricalDtype(categories=['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ'], ordered=True)
+    df_l['ABC_XYZ'] = df_l['ABC_XYZ'].astype(cat_type)
+    
+    df_l['Formato'] = df_base[col_formato] if col_formato else 'N/D'
+    
+    return df_l[df_l['Cantidad_Pallets'] > 0].sort_values(by='ABC_XYZ').reset_index(drop=True)
+
 def mostrar_layout():
     st.title("🏗️ Diseñador de Layout de Bodega")
     
@@ -1095,29 +1170,14 @@ def mostrar_layout():
         st.error("⚠️ Para usar el Layout, primero debes cargar el Excel en el módulo 'Cubicadora WMS'.")
         return
 
-    df_orig, df_res, MAPA = st.session_state.df_original.copy(), st.session_state.df_resultados.copy(), st.session_state.mapa_columnas
-    df_layout_orig, df_layout_opt = pd.DataFrame(), pd.DataFrame()
+    df_orig = st.session_state.df_original.copy()
+    df_res = st.session_state.df_resultados.copy()
+    MAPA = st.session_state.mapa_columnas
     
-    df_layout_orig['SKU'] = df_orig[MAPA['sku']]
-    stock_op = pd.to_numeric(df_orig[MAPA['stock']], errors='coerce').fillna(0)
-    unid_pal = pd.to_numeric(df_orig[MAPA['unidades_pallet']], errors='coerce').fillna(0).replace(0, np.nan)
-    df_layout_orig['Cantidad_Pallets'] = np.ceil(stock_op / unid_pal)
-    df_layout_orig['Alto_m'] = pd.to_numeric(df_orig[MAPA['altura_total']], errors='coerce').fillna(120) / 100.0
-    df_layout_orig['Peso_Pallet_kg'] = [calcular_metricas_dinamicas(row, MAPA, "EXCEL")['Peso_Pallet'] for _, row in df_orig.iterrows()]
-    df_layout_orig['ABC'] = df_orig[MAPA['abc']] if MAPA.get('abc') else 'C'
-    df_layout_orig['XYZ'] = df_orig[MAPA['xyz']] if MAPA.get('xyz') else 'Z'
-    df_layout_orig['ABC_XYZ'] = df_orig[MAPA['abc_xyz']] if MAPA.get('abc_xyz') else df_layout_orig['ABC'] + df_layout_orig['XYZ']
+    df_layout_orig = preparar_df_layout(df_orig, MAPA, "EXCEL")
+    df_layout_opt = preparar_df_layout(df_res, MAPA, "OPTIMO")
 
-    df_layout_opt['SKU'] = df_res[MAPA['sku']]
-    cap_opt = pd.to_numeric(df_res['Capacidad_Optima'], errors='coerce').fillna(0).replace(0, np.nan)
-    df_layout_opt['Cantidad_Pallets'] = np.ceil(stock_op / cap_opt)
-    df_layout_opt['Alto_m'] = df_layout_orig['Alto_m']
-    df_layout_opt['Peso_Pallet_kg'] = [calcular_metricas_dinamicas(row, MAPA, "OPTIMO")['Peso_Pallet'] for _, row in df_res.iterrows()]
-    df_layout_opt['ABC'] = df_layout_orig['ABC']
-    df_layout_opt['XYZ'] = df_layout_orig['XYZ']
-    df_layout_opt['ABC_XYZ'] = df_layout_orig['ABC_XYZ']
-
-    dict_demanda = {'Data Original': df_layout_orig[df_layout_orig['Cantidad_Pallets'] > 0], 'Data Optimizada': df_layout_opt[df_layout_opt['Cantidad_Pallets'] > 0]}
+    dict_demanda = {'Data Original': df_layout_orig, 'Data Optimizada': df_layout_opt}
 
     with st.expander("⚙️ PANEL MASTER CD (Configuración Completa de Bodega)", expanded=True):
         col_inf, col_dr, col_op, col_an = st.columns(4)
@@ -1485,7 +1545,7 @@ st.session_state.menu_seleccion = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v7.2 • Clean Layout")
+st.sidebar.caption("WMS Analytics Hub v8.1 • Precision Sorting")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
