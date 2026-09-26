@@ -392,7 +392,7 @@ def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
     return fig
 
 # ============================================================
-# 4. MOTOR DE CÁLCULO LAYOUT 3D (Coincidiendo exacto con Colab)
+# 4. MOTOR DE CÁLCULO LAYOUT 3D 
 # ============================================================
 def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     l_m, a_m, alt_m = conf['l_bod'], conf['a_bod'], conf['alt_bod']
@@ -546,11 +546,15 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas,
         'CX': '#2E86C1', 'CY': '#3498DB', 'CZ': '#85C1E9'
     }
 
+    # Normalizar skus_buscados para ignorar la palabra "TODOS"
+    if skus_buscados and 'TODOS' in skus_buscados:
+        skus_buscados = set()
+
     capa_pilares = MallaAgrupada('#e74c3c', 'Pilares CD')
     capa_oficinas = MallaAgrupada('#bdc3c7', 'Oficinas', 0.9)
     capa_staging = MallaAgrupada('#f39c12', 'Staging', 0.4)
     capa_marcos = MallaAgrupada('#2c3e50', 'Estructura Rack', 1.0)
-    capa_marcos_bloqueados = MallaAgrupada('#7f8c8d', 'Rack Inactivo', 0.4)
+    capa_marcos_bloqueados = MallaAgrupada('#7f8c8d', 'Rack Inutilizable', 0.4)
     capa_vigas = MallaAgrupada('#e67e22', 'Vigas', 1.0)
     
     capa_maderas = MallaAgrupada('#d35400', 'Pallet Base', 1.0)
@@ -588,6 +592,7 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas,
             add_cube_rotated(c_viga, x_pos + t, y_rack, z_v, res['l_modulo'] - 2*t, t/2, res['viga_h'], is_vertical)
             add_cube_rotated(c_viga, x_pos + t, y_rack + res['pp_d'] - t/2, z_v, res['l_modulo'] - 2*t, t/2, res['viga_h'], is_vertical)
 
+    # DIBUJO DE PALLETS Y CAJAS 3D (Zonificación por colores o Aislamiento de SKU)
     for slot in res['almacen']:
         if slot['ocupado']:
             alt_carga = slot['alt_p'] - 0.12
@@ -601,9 +606,9 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas,
             else:
                 capa_madera = capa_maderas
                 if '9 Zonas' in modo_vista:
-                    capa_caja = cajas.get(slot['abc_xyz'], cajas.get('CZ'))
+                    capa_caja = cajas.get(slot['abc_xyz'], cajas.get('CZ', cajas.get('Destacado')))
                 else:
-                    capa_caja = cajas.get(slot['abc'], cajas.get('C'))
+                    capa_caja = cajas.get(slot['abc'], cajas.get('C', cajas.get('Destacado')))
                 
             add_cube_rotated(capa_madera, slot['x_pal'], slot['y'] + 0.05, slot['z'] + 0.02, res['ap_w'], res['pp_d'] - 0.1, 0.12, is_vertical)
             add_cube_rotated(capa_caja, slot['x_pal'] + 0.05, slot['y'] + 0.1, slot['z'] + 0.14, res['ap_w'] - 0.1, res['pp_d'] - 0.2, alt_carga, is_vertical, txt_hover)
@@ -1326,7 +1331,7 @@ st.session_state.menu_seleccion = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v6.5 • Full Parity 3D")
+st.sidebar.caption("WMS Analytics Hub v6.5 • Full Parity 3D Fix")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
