@@ -302,7 +302,12 @@ def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
         niv += 1
     
     fig = go.Figure(data=[m_base.obtener_trazo(), m_carga.obtener_trazo()])
-    fig.update_layout(scene=dict(xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False), aspectmode='data'), margin=dict(r=0,l=0,b=0,t=0), height=300)
+    sku_name = valor_col(fila, "sku", mapa)
+    fig.update_layout(
+        title=dict(text=f"<b>📦 Pallet Unitario ({sku_name})</b>", x=0.5, font=dict(size=11, color="#475569")),
+        scene=dict(xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False), aspectmode='data'), 
+        margin=dict(r=0,l=0,b=0,t=25), height=300
+    )
     return fig
 
 # ============================================================
@@ -881,8 +886,6 @@ def mostrar_layout():
         
         if mostrar_3d_layout:
             with st.spinner("Construyendo Mallas 3D de la Bodega..."):
-                raw_sub = st.session_state.filtro_sublayout.strip()
-                skus_b = set(s.strip().upper() for s in re.split(r'[,\s;]+', raw_sub) if s.strip()) if getattr(st.session_state, 'modo_layout_eval', 'todos') == 'filtro' else set()
                 st.plotly_chart(generar_layout_3d(res, l_m, a_m, st.session_state.alt_bod, res['is_vertical'], skus_b, puertas, st.session_state.modo_vista_color), use_container_width=True)
 
 def mostrar_analytics():
@@ -963,7 +966,7 @@ def mostrar_outbound():
 menu_opciones = ["🏠 Portada Principal", "📦 Cubicadora WMS", "🏗️ Layout de Bodega", "📊 Analytics & Reportería", "📥 Entrada Mercadería", "📤 Salida Mercadería"]
 st.session_state.menu_seleccion = st.sidebar.radio("Navegación", menu_opciones, index=menu_opciones.index(st.session_state.menu_seleccion))
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v9.0 • Clean AI Renderer")
+st.sidebar.caption("WMS Analytics Hub v8.9 • Final Production")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
