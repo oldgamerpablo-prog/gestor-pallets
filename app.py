@@ -392,7 +392,7 @@ def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
     return fig
 
 # ============================================================
-# 4. MOTOR DE CÁLCULO LAYOUT 3D 
+# 4. MOTOR DE CÁLCULO LAYOUT 3D (Coincidiendo exacto con Colab)
 # ============================================================
 def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     l_m, a_m, alt_m = conf['l_bod'], conf['a_bod'], conf['alt_bod']
@@ -501,12 +501,15 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
         'pp_d': pp_d, 'ap_w': ap_w, 'viga_h': viga_h, 'is_vertical': is_vertical
     }
 
+# CLASE MALLA AGRUPADA UNIFICADA CON COLAB (Con soporte de Hover Text)
 class MallaAgrupada:
     def __init__(self, color, nombre, opacidad=1.0):
         self.color, self.nombre, self.opacidad = color, nombre, opacidad
-        self.x, self.y, self.z, self.i, self.j, self.k, self.contador = [], [], [], [], [], [], 0
+        self.x, self.y, self.z, self.i, self.j, self.k, self.text = [], [], [], [], [], [], []
+        self.contador = 0
         self.base_i, self.base_j, self.base_k = [7,0,0,0,4,4,6,6,4,0,3,2], [3,4,1,2,5,6,5,2,0,1,6,3], [0,7,2,3,6,7,1,1,5,5,7,6]
-    def agregar_cubo(self, x0, y0, z0, dx, dy, dz):
+
+    def agregar_cubo(self, x0, y0, z0, dx, dy, dz, hover_txt=None):
         off = self.contador * 8
         self.x.extend([x0, x0+dx, x0+dx, x0, x0, x0+dx, x0+dx, x0])
         self.y.extend([y0, y0, y0+dy, y0+dy, y0, y0, y0+dy, y0+dy])
@@ -514,36 +517,58 @@ class MallaAgrupada:
         self.i.extend([idx + off for idx in self.base_i])
         self.j.extend([idx + off for idx in self.base_j])
         self.k.extend([idx + off for idx in self.base_k])
+        if hover_txt: self.text.extend([hover_txt] * 8)
         self.contador += 1
+
     def obtener_trazo(self):
         if self.contador == 0: return None
-        return go.Mesh3d(x=self.x, y=self.y, z=self.z, i=self.i, j=self.j, k=self.k, color=self.color, opacity=self.opacidad, name=self.nombre, hoverinfo="name", showscale=False, flatshading=True)
+        params = dict(
+            x=self.x, y=self.y, z=self.z, i=self.i, j=self.j, k=self.k,
+            color=self.color, opacity=self.opacidad, name=self.nombre,
+            showscale=False, flatshading=True
+        )
+        if self.text:
+            params['text'] = self.text
+            params['hoverinfo'] = "text"
+        else:
+            params['hoverinfo'] = "name"
+        return go.Mesh3d(**params)
 
-def add_cube_rotated(capa, x0, y0, z0, dx, dy, dz, is_vertical):
-    if is_vertical: capa.agregar_cubo(y0, x0, z0, dy, dx, dz)
-    else: capa.agregar_cubo(x0, y0, z0, dx, dy, dz)
+def add_cube_rotated(capa, x0, y0, z0, dx, dy, dz, is_vertical, hover_txt=None):
+    if is_vertical: capa.agregar_cubo(y0, x0, z0, dy, dx, dz, hover_txt)
+    else: capa.agregar_cubo(x0, y0, z0, dx, dy, dz, hover_txt)
 
-def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas):
-    skus_unicos_ubicados = sorted(list(set(s['sku'] for s in res['almacen'] if s['ocupado'])))
-    paleta_colores = ['#2ecc71', '#3498db', '#9b59b6', '#f1c40f', '#e67e22', '#1abc9c', '#e74c3c']
+def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas, modo_vista):
+    dict_color_abc = {'A': '#e74c3c', 'B': '#f39c12', 'C': '#3498db'}
+    dict_color_abcxyz = {
+        'AX': '#900C3F', 'AY': '#C70039', 'AZ': '#FF5733',
+        'BX': '#E67E22', 'BY': '#F39C12', 'BZ': '#F1C40F',
+        'CX': '#2E86C1', 'CY': '#3498DB', 'CZ': '#85C1E9'
+    }
 
-    capas_sku = {}
-    for idx, s in enumerate(skus_unicos_ubicados):
-        if not skus_buscados or s in skus_buscados:
-            capas_sku[s] = MallaAgrupada(paleta_colores[idx % len(paleta_colores)], f"SKU: {s}", 1.0)
-
-    capa_pilares = MallaAgrupada('#e74c3c', 'Pilares')
+    capa_pilares = MallaAgrupada('#e74c3c', 'Pilares CD')
     capa_oficinas = MallaAgrupada('#bdc3c7', 'Oficinas', 0.9)
     capa_staging = MallaAgrupada('#f39c12', 'Staging', 0.4)
-    capa_marcos = MallaAgrupada('#2c3e50', 'Rack', 0.1 if skus_buscados else 1.0)
+    capa_marcos = MallaAgrupada('#2c3e50', 'Estructura Rack', 1.0)
     capa_marcos_bloqueados = MallaAgrupada('#7f8c8d', 'Rack Inactivo', 0.4)
-    capa_vigas = MallaAgrupada('#e67e22', 'Vigas', 0.1 if skus_buscados else 1.0)
-    capa_maderas = MallaAgrupada('#d35400', 'Base Pallet', 1.0)
+    capa_vigas = MallaAgrupada('#e67e22', 'Vigas', 1.0)
+    
+    capa_maderas = MallaAgrupada('#d35400', 'Pallet Base', 1.0)
+    capa_maderas_apagadas = MallaAgrupada('#bdc3c7', 'Pallet Oculto', 0.1)
+
+    cajas = {'Destacado': MallaAgrupada('#2ecc71', 'SKU Buscado', 1.0), 'Apagado': MallaAgrupada('#ecf0f1', 'Oculto', 0.1)}
+
+    if '9 Zonas' in modo_vista:
+        for k, color in dict_color_abcxyz.items(): cajas[k] = MallaAgrupada(color, f'Clase {k}')
+    else:
+        for k, color in dict_color_abc.items(): cajas[k] = MallaAgrupada(color, f'Clase {k}')
 
     for px, py in res['pilares_reales']:
         if px < l_m and py < a_m: capa_pilares.agregar_cubo(px - 0.25, py - 0.25, 0, 0.5, 0.5, alt_m)
-    for ofi in res['oficinas']: capa_oficinas.agregar_cubo(ofi['x'], ofi['y'], 0, ofi['w'], ofi['d'], ofi.get('h', 3.5))
-    for st_z in res['staging']: capa_staging.agregar_cubo(st_z['x1'], st_z['y1'], 0.01, st_z['x2'] - st_z['x1'], st_z['y2'] - st_z['y1'], 0.02)
+    for ofi in res['oficinas']:
+        capa_oficinas.agregar_cubo(ofi['x'], ofi['y'], 0, ofi['w'], ofi['d'], ofi.get('h', 3.5))
+    for st_z in res['staging']:
+        capa_staging.agregar_cubo(st_z['x1'], st_z['y1'], 0.01, st_z['x2'] - st_z['x1'], st_z['y2'] - st_z['y1'], 0.02)
 
     t, h_rack = res['t_marco'], max(res['niveles'] * res['alt_nivel_viga'], res['alt_nivel_viga'])
     
@@ -556,6 +581,7 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas)
         add_cube_rotated(c_activa, x_pos + res['l_modulo'] - t, y_rack, 0, t, t, h_rack, is_vertical)
         add_cube_rotated(c_activa, x_pos + res['l_modulo'] - t, y_rack + res['pp_d'] - t, 0, t, t, h_rack, is_vertical)
         add_cube_rotated(c_activa, x_pos, y_rack, h_rack, res['l_modulo'], res['pp_d'], 0.05, is_vertical)
+
         c_viga = capa_marcos_bloqueados if mod['bloqueado'] else capa_vigas
         for n_v in range(1, res['niveles']):
             z_v = n_v * res['alt_nivel_viga'] - res['viga_h']
@@ -563,22 +589,62 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas)
             add_cube_rotated(c_viga, x_pos + t, y_rack + res['pp_d'] - t/2, z_v, res['l_modulo'] - 2*t, t/2, res['viga_h'], is_vertical)
 
     for slot in res['almacen']:
-        if slot['ocupado'] and ((not skus_buscados) or (slot['sku'] in skus_buscados)):
-            add_cube_rotated(capa_maderas, slot['x_pal'], slot['y'] + 0.05, slot['z'] + 0.02, res['ap_w'], res['pp_d'] - 0.1, 0.12, is_vertical)
+        if slot['ocupado']:
             alt_carga = slot['alt_p'] - 0.12
-            add_cube_rotated(capas_sku[slot['sku']], slot['x_pal'] + 0.05, slot['y'] + 0.1, slot['z'] + 0.14, res['ap_w'] - 0.1, res['pp_d'] - 0.2, alt_carga, is_vertical)
+            txt_hover = f"Pos: {slot['id_posicion']}<br>SKU: {slot['sku']}<br>ABC-XYZ: {slot['abc_xyz']}"
+            
+            if skus_buscados:
+                if slot['sku'] in skus_buscados:
+                    capa_caja, capa_madera = cajas['Destacado'], capa_maderas
+                else:
+                    capa_caja, capa_madera = cajas['Apagado'], capa_maderas_apagadas
+            else:
+                capa_madera = capa_maderas
+                if '9 Zonas' in modo_vista:
+                    capa_caja = cajas.get(slot['abc_xyz'], cajas.get('CZ'))
+                else:
+                    capa_caja = cajas.get(slot['abc'], cajas.get('C'))
+                
+            add_cube_rotated(capa_madera, slot['x_pal'], slot['y'] + 0.05, slot['z'] + 0.02, res['ap_w'], res['pp_d'] - 0.1, 0.12, is_vertical)
+            add_cube_rotated(capa_caja, slot['x_pal'] + 0.05, slot['y'] + 0.1, slot['z'] + 0.14, res['ap_w'] - 0.1, res['pp_d'] - 0.2, alt_carga, is_vertical, txt_hover)
+
+    c_puertas_cortina = MallaAgrupada('#f1c40f', 'Cortina', 0.4)
+    c_puertas_marcos = MallaAgrupada('#f39c12', 'Marco', 1.0)
+    alt_puerta = 4.5
+    for p in puertas:
+        pared, pos, w = p['pared'], p['pos'], p['w']
+        if pared == 'S':
+            c_puertas_cortina.agregar_cubo(pos, 0.1, 0, w, 0.1, alt_puerta)
+            c_puertas_marcos.agregar_cubo(pos, 0, 0, 0.2, 0.3, alt_puerta)
+            c_puertas_marcos.agregar_cubo(pos+w-0.2, 0, 0, 0.2, 0.3, alt_puerta)
+            c_puertas_marcos.agregar_cubo(pos, 0, alt_puerta, w, 0.3, 0.4)
+        elif pared == 'N':
+            c_puertas_cortina.agregar_cubo(pos, a_m-0.2, 0, w, 0.1, alt_puerta)
+            c_puertas_marcos.agregar_cubo(pos, a_m-0.3, 0, 0.2, 0.3, alt_puerta)
+            c_puertas_marcos.agregar_cubo(pos+w-0.2, a_m-0.3, 0, 0.2, 0.3, alt_puerta)
+            c_puertas_marcos.agregar_cubo(pos, a_m-0.3, alt_puerta, w, 0.3, 0.4)
+        elif pared == 'E':
+            c_puertas_cortina.agregar_cubo(l_m-0.2, pos, 0, 0.1, w, alt_puerta)
+            c_puertas_marcos.agregar_cubo(l_m-0.3, pos, 0, 0.3, 0.2, alt_puerta)
+            c_puertas_marcos.agregar_cubo(l_m-0.3, pos+w-0.2, 0, 0.3, 0.2, alt_puerta)
+            c_puertas_marcos.agregar_cubo(l_m-0.3, pos, alt_puerta, 0.3, w, 0.4)
+        elif pared == 'O':
+            c_puertas_cortina.agregar_cubo(0.1, pos, 0, 0.1, w, alt_puerta)
+            c_puertas_marcos.agregar_cubo(0, pos, 0, 0.3, 0.2, alt_puerta)
+            c_puertas_marcos.agregar_cubo(0, pos+w-0.2, 0, 0.3, 0.2, alt_puerta)
+            c_puertas_marcos.agregar_cubo(0, pos, alt_puerta, 0.3, w, 0.4)
 
     fig_3d = go.Figure()
-    fig_3d.add_trace(go.Mesh3d(x=[0, l_m, l_m, 0, 0, l_m, l_m, 0], y=[0, 0, a_m, a_m, 0, 0, a_m, a_m], z=[-0.1, -0.1, -0.1, -0.1, 0, 0, 0, 0], i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2], j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3], k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6], color='#ecf0f1', showscale=False, name='Suelo'))
+    fig_3d.add_trace(go.Mesh3d(x=[0, l_m, l_m, 0, 0, l_m, l_m, 0], y=[0, 0, a_m, a_m, 0, 0, a_m, a_m], z=[-0.1, -0.1, -0.1, -0.1, 0, 0, 0, 0], i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2], j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3], k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6], color='#bdc3c7', showscale=False, name='Suelo'))
 
-    for c in [capa_pilares, capa_oficinas, capa_staging, capa_marcos, capa_marcos_bloqueados, capa_vigas, capa_maderas] + list(capas_sku.values()):
+    for c in [capa_pilares, capa_oficinas, capa_staging, capa_marcos, capa_marcos_bloqueados, capa_vigas, capa_maderas, capa_maderas_apagadas] + list(cajas.values()) + [c_puertas_cortina, c_puertas_marcos]:
         trace = c.obtener_trazo()
         if trace: fig_3d.add_trace(trace)
 
     fig_3d.update_layout(
-        title=dict(text=f"<b>Gemelo Digital CD 3D</b><br><sup>Ubicados: {res['pallets_ubicados_totales']} pallets</sup>", x=0.5),
-        scene=dict(xaxis=dict(range=[-5, l_m + 5]), yaxis=dict(range=[-5, a_m + 5]), zaxis=dict(range=[0, alt_m + 1]), aspectmode='data', camera=dict(eye=dict(x=1.5, y=1.5, z=1.2))),
-        margin=dict(r=0, l=0, b=0, t=80), height=750, paper_bgcolor='white'
+        title=dict(text=f"<b>Gemelo Digital CD 3D | Hover Interactivo</b><br><sup>Ubicados: {res['pallets_ubicados_totales']} pallets</sup>", x=0.5, font=dict(size=16)),
+        scene=dict(xaxis=dict(title='Largo X (m)', range=[-5, l_m + 5], backgroundcolor="white"), yaxis=dict(title='Ancho Y (m)', range=[-5, a_m + 5], backgroundcolor="white"), zaxis=dict(title='Alto Z (m)', range=[0, max(10, alt_m + 1)], backgroundcolor="white"), aspectmode='data', camera=dict(eye=dict(x=1.5, y=1.5, z=1.2))),
+        margin=dict(r=0, l=0, b=0, t=80), height=750, paper_bgcolor='white', showlegend=False
     )
     return fig_3d
 
@@ -744,13 +810,11 @@ def mostrar_cubicadora():
         st.markdown("<br>", unsafe_allow_html=True)
         mostrar_graf = st.toggle("🖼️ Mostrar Planos 2D / 3D (Desactiva esta opción para obtener mayor velocidad en búsquedas masivas)", value=True)
 
-        # Dataset activo para métricas
         if st.session_state.skus_activos:
             df_kpi = df_f[df_f[MAPA['sku']].astype(str).str.upper().isin(st.session_state.skus_activos)]
         else:
             df_kpi = df_f
 
-        # Cálculo exacto a Colab
         tot_sku_kpi = len(df_kpi)
         con_stock_kpi = int((pd.to_numeric(df_kpi[MAPA["stock"]], errors="coerce").fillna(0) > 0).sum())
         tot_pallets_kpi = sum([calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"] for _, row in df_kpi.iterrows()])
@@ -761,7 +825,6 @@ def mostrar_cubicadora():
             if "EXCEL" in m_a["Estado"] or "PELIGRO" in m_a["Estado"] or "REVISAR" in m_a["Estado"]:
                 alertas_activas_kpi += 1
 
-        # DASHBOARD DE KPI LIMPIO Y REFINADO
         modo_txt = "MODO EXCEL (VALORES MANUALES)" if modo == "EXCEL" else "MODO OPTIMIZADO (MÁXIMA FÍSICA)"
         color_modo = "#3b82f6" if modo == "EXCEL" else "#f59e0b"
         
@@ -1152,7 +1215,7 @@ def mostrar_layout():
             with st.spinner("Construyendo Mallas 3D de la Bodega..."):
                 raw_sub = st.session_state.filtro_sublayout.strip()
                 skus_b = set(s.strip().upper() for s in re.split(r'[,\s;]+', raw_sub) if s.strip()) if getattr(st.session_state, 'modo_layout_eval', 'todos') == 'filtro' else set()
-                fig_3d = generar_layout_3d(res, l_m, a_m, st.session_state.alt_bod, res['is_vertical'], skus_b, puertas)
+                fig_3d = generar_layout_3d(res, l_m, a_m, st.session_state.alt_bod, res['is_vertical'], skus_b, puertas, st.session_state.modo_vista_color)
                 st.plotly_chart(fig_3d, use_container_width=True)
 
 def mostrar_analytics():
@@ -1263,7 +1326,7 @@ st.session_state.menu_seleccion = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v6.5 • Refined Design")
+st.sidebar.caption("WMS Analytics Hub v6.5 • Full Parity 3D")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
