@@ -303,7 +303,7 @@ def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
     
     fig = go.Figure(data=[m_base.obtener_trazo(), m_carga.obtener_trazo()])
     sku_name = valor_col(fila, "sku", mapa)
-    fig.update_layout(
+    _ = fig.update_layout(
         title=dict(text=f"<b>📦 Pallet Unitario ({sku_name})</b>", x=0.5, font=dict(size=11, color="#475569")),
         scene=dict(xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False), aspectmode='data'), 
         margin=dict(r=0,l=0,b=0,t=25), height=300
@@ -449,12 +449,16 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas,
             c_puertas_cortina.agregar_cubo(0.1, pos, 0, 0.1, w, alt_puerta); c_puertas_marcos.agregar_cubo(0, pos, 0, 0.3, 0.2, alt_puerta); c_puertas_marcos.agregar_cubo(0, pos+w-0.2, 0, 0.3, 0.2, alt_puerta); c_puertas_marcos.agregar_cubo(0, pos, alt_puerta, 0.3, w, 0.4)
 
     fig_3d = go.Figure()
-    fig_3d.add_trace(go.Mesh3d(x=[0, l_m, l_m, 0, 0, l_m, l_m, 0], y=[0, 0, a_m, a_m, 0, 0, a_m, a_m], z=[-0.1, -0.1, -0.1, -0.1, 0, 0, 0, 0], i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2], j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3], k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6], color='#ecf0f1', showscale=False, name='Suelo'))
+    _ = fig_3d.add_trace(go.Mesh3d(x=[0, l_m, l_m, 0, 0, l_m, l_m, 0], y=[0, 0, a_m, a_m, 0, 0, a_m, a_m], z=[-0.1, -0.1, -0.1, -0.1, 0, 0, 0, 0], i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2], j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3], k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6], color='#ecf0f1', showscale=False, name='Suelo'))
+    
     for c in [c_pil, c_ofi, c_sz, c_m, c_mb, c_v, c_mad, c_mada] + list(c_f.values()) + list(c_s.values()) + [c_puertas_cortina, c_puertas_marcos]:
-        tr = c.obtener_trazo(); fig_3d.add_trace(tr) if tr else None
+        tr = c.obtener_trazo()
+        if tr:
+            _ = fig_3d.add_trace(tr)
     
     ef = "<b style='color:#e67e22;'>[FOCO ACTIVO]</b><br>" if skus_buscados else ""
-    fig_3d.update_layout(title=dict(text=f"{ef}<b>Gemelo Digital 3D | Formatos Reales</b><br><sup>Ubicados: {res['pallets_ubicados_totales']} pallets</sup>", x=0.5, font=dict(size=16)), scene=dict(xaxis=dict(title='Largo X (m)', range=[-5, l_m + 5], backgroundcolor="white"), yaxis=dict(title='Ancho Y (m)', range=[-5, a_m + 5], backgroundcolor="white"), zaxis=dict(title='Alto Z (m)', range=[0, max(10, alt_m + 1)], backgroundcolor="white"), aspectmode='data', camera=dict(eye=dict(x=1.5, y=1.5, z=1.2))), margin=dict(r=0, l=0, b=0, t=80), height=750, paper_bgcolor='white', showlegend=False)
+    _ = fig_3d.update_layout(title=dict(text=f"{ef}<b>Gemelo Digital 3D | Formatos Reales</b><br><sup>Ubicados: {res['pallets_ubicados_totales']} pallets</sup>", x=0.5, font=dict(size=16)), scene=dict(xaxis=dict(title='Largo X (m)', range=[-5, l_m + 5], backgroundcolor="white"), yaxis=dict(title='Ancho Y (m)', range=[-5, a_m + 5], backgroundcolor="white"), zaxis=dict(title='Alto Z (m)', range=[0, max(10, alt_m + 1)], backgroundcolor="white"), aspectmode='data', camera=dict(eye=dict(x=1.5, y=1.5, z=1.2))), margin=dict(r=0, l=0, b=0, t=80), height=750, paper_bgcolor='white', showlegend=False)
+    
     return fig_3d
 
 # ============================================================
