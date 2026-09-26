@@ -102,7 +102,7 @@ color_styles = """
 """
 
 # ============================================================
-# 2. FUNCIONES CORE (Cubicadora exacta a Colab)
+# 2. FUNCIONES CORE (Cubicadora)
 # ============================================================
 def norm_txt(valor):
     texto = "" if valor is None else str(valor)
@@ -430,7 +430,10 @@ def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
                 cx, cy = c['x'] + c['largo']/2, c['y'] + c['ancho']/2
                 traces.append(crear_cilindro_solido_cm(cx, cy, z_base, radio - 0.2, alto - 0.5, color_carga))
                 theta = np.linspace(0, 2*np.pi, 24)
-                traces.append(go.Scatter3d(x=cx + (radio - 0.2) * np.cos(theta), y=cy + (radio - 0.2) * np.sin(theta), z=np.full(24, z_base + alto - 0.5), mode='lines', line=dict(color='#1e3a8a', width=3), showlegend=False, hoverinfo='none'))
+                traces.append(go.Scatter3d(
+                    x=cx + (radio - 0.2) * np.cos(theta), y=cy + (radio - 0.2) * np.sin(theta), z=np.full(24, z_base + alto - 0.5),
+                    mode='lines', line=dict(color='#1e3a8a', width=3), showlegend=False, hoverinfo='none'
+                ))
             else:
                 gap = 0.5
                 x_c, y_c = c['x'] + gap/2, c['y'] + gap/2
@@ -569,7 +572,6 @@ class MallaAgrupada:
         self.x, self.y, self.z, self.i, self.j, self.k, self.text = [], [], [], [], [], [], []
         self.contador = 0
         self.base_i, self.base_j, self.base_k = [7,0,0,0,4,4,6,6,4,0,3,2], [3,4,1,2,5,6,5,2,0,1,6,3], [0,7,2,3,6,7,1,1,5,5,7,6]
-
     def agregar_cubo(self, x0, y0, z0, dx, dy, dz, hover_txt=None):
         off = self.contador * 8
         self.x.extend([x0, x0+dx, x0+dx, x0, x0, x0+dx, x0+dx, x0])
@@ -580,7 +582,6 @@ class MallaAgrupada:
         self.k.extend([idx + off for idx in self.base_k])
         if hover_txt: self.text.extend([hover_txt] * 8)
         self.contador += 1
-
     def obtener_trazo(self):
         if self.contador == 0: return None
         params = dict(
@@ -699,7 +700,7 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas,
             c_puertas_marcos.agregar_cubo(0, pos, alt_puerta, 0.3, w, 0.4)
 
     fig_3d = go.Figure()
-    fig_3d.add_trace(go.Mesh3d(x=[0, l_m, l_m, 0, 0, l_m, l_m, 0], y=[0, 0, a_m, a_m, 0, 0, a_m, a_m], z=[-0.1, -0.1, -0.1, -0.1, 0, 0, 0, 0], i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2], j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3], k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6], color='#bdc3c7', showscale=False, name='Suelo'))
+    fig_3d.add_trace(go.Mesh3d(x=[0, l_m, l_m, 0, 0, l_m, l_m, 0], y=[0, 0, a_m, a_m, 0, 0, a_m, a_m], z=[-0.1, -0.1, -0.1, -0.1, 0, 0, 0, 0], i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2], j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3], k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6], color='#ecf0f1', showscale=False, name='Suelo'))
 
     for c in [capa_pilares, capa_oficinas, capa_staging, capa_marcos, capa_marcos_bloqueados, capa_vigas, capa_maderas, capa_maderas_apagadas] + list(cajas.values()) + [c_puertas_cortina, c_puertas_marcos]:
         trace = c.obtener_trazo()
@@ -879,12 +880,12 @@ def mostrar_cubicadora():
         else:
             df_kpi = df_f
 
-        tot_sku_kpi = len(df_kpi)
-        con_stock_kpi = int((pd.to_numeric(df_kpi[MAPA["stock"]], errors="coerce").fillna(0) > 0).sum())
-        tot_pallets_kpi = sum([calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"] for _, row in df_kpi.iterrows()])
+        tot_sku_kpi = len(df_f)
+        con_stock_kpi = int((pd.to_numeric(df_f[MAPA["stock"]], errors="coerce").fillna(0) > 0).sum())
+        tot_pallets_kpi = sum([calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"] for _, row in df_f.iterrows()])
         
         alertas_activas_kpi = 0
-        for _, row in df_kpi.iterrows():
+        for _, row in df_f.iterrows():
             m_a = calcular_metricas_dinamicas(row, MAPA, modo)
             if "EXCEL" in m_a["Estado"] or "PELIGRO" in m_a["Estado"] or "REVISAR" in m_a["Estado"]:
                 alertas_activas_kpi += 1
@@ -913,7 +914,7 @@ def mostrar_cubicadora():
         with k2:
             st.markdown(f"""
             <div style="background: #ffffff; border: 1px solid #e2e8f0; border-left: 4px solid #10b981; padding: 14px 16px; margin-bottom: 20px;">
-                <div style="font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: 0.5px; margin-bottom: 4px;">CON STOCK</div>
+                <div style="font-size: 10px; font-weight: 800; color: #64748b; letter-spacing: 0.5px; margin-bottom: 4px;">SKUs CON STOCK</div>
                 <div style="font-size: 22px; font-weight: 800; color: #0f172a;">{con_stock_kpi:,}</div>
             </div>
             """, unsafe_allow_html=True)
@@ -1062,14 +1063,14 @@ def mostrar_cubicadora():
                         st.markdown("<br>", unsafe_allow_html=True)
 
         with tab_descargar:
-            st.write(f"Genera un Excel completo con las **24 columnas WMS** de los **{len(df_kpi)} SKUs** actuales.")
-            excel_data = generar_excel_descarga(st.session_state.df_original, df_kpi, MAPA)
+            st.write(f"Genera un Excel completo con las **24 columnas WMS** de los **{len(df_f)} SKUs** actuales.")
+            excel_data = generar_excel_descarga(st.session_state.df_original, df_f, MAPA)
             st.download_button("📊 Descargar Reporte WMS Completo (Excel)", data=excel_data, file_name="Reporte_Paletizacion_Optimizado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         with tab_alertas:
-            alertas = [{"SKU": row[MAPA["sku"]], "Estado": calcular_metricas_dinamicas(row, MAPA, modo)["Estado"], "Pallets": calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"]} for _, row in df_kpi.iterrows() if "EXCEL" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "PELIGRO" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "REVISAR" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"]]
-            if alertas: st.warning(f"Se encontraron {len(alertas)} SKUs con alertas en esta selección."); st.dataframe(pd.DataFrame(alertas), use_container_width=True)
-            else: st.success("🎉 ¡Excelente! No hay alertas en tu selección.")
-        with tab_datos: st.dataframe(df_kpi, use_container_width=True)
+            alertas = [{"SKU": row[MAPA["sku"]], "Estado": calcular_metricas_dinamicas(row, MAPA, modo)["Estado"], "Pallets": calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"]} for _, row in df_f.iterrows() if "EXCEL" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "PELIGRO" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "REVISAR" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"]]
+            if alertas: st.warning(f"Se encontraron {len(alertas)} SKUs con alertas."); st.dataframe(pd.DataFrame(alertas), use_container_width=True)
+            else: st.success("🎉 ¡Excelente! No hay alertas.")
+        with tab_datos: st.dataframe(df_f, use_container_width=True)
     else: st.info("👆 Sube tu archivo Excel para comenzar.")
 
 def mostrar_layout():
