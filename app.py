@@ -28,15 +28,22 @@ if "df_original" not in st.session_state: st.session_state.df_original = None
 if "df_resultados" not in st.session_state: st.session_state.df_resultados = None
 if "mapa_columnas" not in st.session_state: st.session_state.mapa_columnas = None
 
-# Memoria Layout
+# Memoria Layout (Coincidiendo exacto con Colab)
 parametros_layout = {
-    'l_bod': 40.0, 'a_bod': 50.0, 'alt_bod': 7.0, 'cant_pilares_x': 4, 'cant_pilares_y': 1,
-    'dist_pilares_x': 20.0, 'dist_pilares_y': 15.0, 'ofi_pos_x': 0.0, 'ofi_pos_y': 0.0,
-    'ofi_largo': 10.0, 'ofi_ancho': 5.0, 'ofi_alto': 3.5, 'pallets_viga': 2, 'peso_max_pallet': 2000.0,
+    'l_bod': 50.0, 'a_bod': 40.0, 'alt_bod': 7.0,
+    'cant_pilares_x': 4, 'cant_pilares_y': 1, 'dist_pilares_x': 20.0, 'dist_pilares_y': 15.0,
+    'ofi_pos_x': 0.0, 'ofi_pos_y': 0.0, 'ofi_largo': 10.0, 'ofi_ancho': 5.0, 'ofi_alto': 3.5,
+    'pallets_viga': 2, 'peso_max_pallet': 2000.0,
     'tipo_flujo': 'Flujo en I (Línea Recta)', 'ancho_porton': 6.0, 'orientacion_rack': 'Horizontal (X)',
-    'pasillo': 3.0, 'cant_pas_trans': 0, 'ancho_pas_trans': 3.0, 'alt_grua': 10.5, 'peso_max_grua': 1500.0,
+    'pasillo': 3.0, 'cant_pas_trans': 0, 'ancho_pas_trans': 3.0,
+    'alt_grua': 10.5, 'peso_max_grua': 1500.0,
+    'cant_ptas_norte': 0, 'w_ptas_norte': 6.0,
+    'cant_ptas_sur': 0, 'w_ptas_sur': 6.0,
+    'cant_ptas_este': 0, 'w_ptas_este': 6.0,
+    'cant_ptas_oeste': 0, 'w_ptas_oeste': 6.0,
     'fuente_datos': 'Data Original', 'filtro_sublayout': 'TODOS',
-    'chk_a': True, 'chk_b': True, 'chk_c': True
+    'chk_a': True, 'chk_b': True, 'chk_c': True,
+    'modo_vista_color': '3 Zonas (ABC)'
 }
 for k, v in parametros_layout.items():
     if k not in st.session_state: st.session_state[k] = v
@@ -90,7 +97,7 @@ color_styles = """
 """
 
 # ============================================================
-# 2. FUNCIONES CORE (Cubicadora)
+# 2. FUNCIONES CORE (Cubicadora exacta a Colab)
 # ============================================================
 def norm_txt(valor):
     texto = "" if valor is None else str(valor)
@@ -133,7 +140,7 @@ def procesar_datos(df_original):
     mapa["ancho_pallet"] = me_ap = encontrar_columna(cols, ["ancho", "pallet"])
     mapa["altura_pallet"] = encontrar_columna(cols, ["altura", "pallet"], ["total", "paletizada"]) or me_lp or me_ap
     mapa["unidades_pallet"] = encontrar_columna(cols, ["unidades", "pallet"])
-    mapa["altura_total"] = encontrar_columna(cols, ["altura", "total", "pallet"]) or encontrar_columna(cols, ["peso"], ["total", "pallet"]) or encontrar_columna(cols, ["altura", "paletizada"])
+    mapa["altura_total"] = encontrar_columna(cols, ["altura", "total", "pallet"]) or me_lp or encontrar_columna(cols, ["altura", "paletizada"])
     
     mapa["abc"] = encontrar_columna(cols, ["abc"], ["xyz"])
     mapa["xyz"] = encontrar_columna(cols, ["xyz"], ["abc"])
@@ -187,15 +194,20 @@ def precalcular_fila(fila, mapa):
     altura_total = a_float(valor_col(fila, "altura_total", mapa))
     layout = mejor_distribucion_filas(largo, ancho, largo_pallet, ancho_pallet)
     unidades_nivel = layout["cantidad"]
-    niveles_por_altura, niveles_por_peso = float('inf'), float('inf')
+    
+    niveles_por_altura = float('inf')
     if all(es_numero(v) and v > 0 for v in [altura_total, altura_pallet, alto]) and altura_total > altura_pallet:
         niveles_por_altura = math.floor((altura_total - altura_pallet) / alto)
+        
+    niveles_por_peso = float('inf')
     if es_numero(peso_unitario) and peso_unitario > 0 and unidades_nivel > 0:
         peso_por_nivel = unidades_nivel * peso_unitario
         niveles_por_peso = math.floor((MAX_PESO_PALLET - PESO_MADERA_PALLET) / peso_por_nivel)
+        
     niveles_optimos = min(niveles_por_altura, niveles_por_peso)
     if math.isinf(niveles_optimos) or niveles_optimos <= 0:
         niveles_optimos = max(1, int(round(capacidad_base / unidades_nivel))) if (es_numero(capacidad_base) and unidades_nivel > 0) else 1
+
     return pd.Series({"Capacidad_Excel": capacidad_base, "Capacidad_Optima": int(unidades_nivel * niveles_optimos), "Unidades_Por_Nivel": unidades_nivel, "Niveles_Optimos": niveles_optimos})
 
 def calcular_metricas_dinamicas(fila, mapa, modo="EXCEL"):
@@ -203,17 +215,26 @@ def calcular_metricas_dinamicas(fila, mapa, modo="EXCEL"):
     cap_excel = a_float(fila.get("Capacidad_Excel"), 0)
     cap_optima = int(fila.get("Capacidad_Optima", 0))
     peso_unitario = a_float(valor_col(fila, "peso", mapa))
-    if modo == "OPTIMO": cap_usada = cap_optima if cap_optima > 0 else int(round(cap_excel)) if es_numero(cap_excel) else 0
-    else: cap_usada = int(round(cap_excel)) if (es_numero(cap_excel) and cap_excel > 0) else cap_optima
+    
+    if modo == "OPTIMO":
+        cap_usada = cap_optima if cap_optima > 0 else int(round(cap_excel)) if es_numero(cap_excel) else 0
+    else:
+        cap_usada = int(round(cap_excel)) if (es_numero(cap_excel) and cap_excel > 0) else cap_optima
+
     pallets = int(math.ceil(stock / cap_usada)) if stock > 0 and cap_usada > 0 else 0
     ult_unids = (stock - (pallets - 1) * cap_usada) if pallets > 0 else 0
     if ult_unids == 0 and stock > 0: ult_unids = cap_usada
     ult_pct = (ult_unids / cap_usada * 100) if cap_usada > 0 else 0
+
     peso_pallet = (cap_usada * peso_unitario) + PESO_MADERA_PALLET if es_numero(peso_unitario) else np.nan
-    estado = "✅ OK"
-    if stock <= 0: estado = "❌ SIN STOCK"
-    elif cap_usada <= 0: estado = "⚠️ REVISAR DATOS"
-    elif es_numero(peso_pallet) and peso_pallet > MAX_PESO_PALLET: estado = "🚨 SOBREPESO (>1200kg)"
+    diferencia = (cap_optima - cap_excel) if es_numero(cap_excel) else 0
+
+    estado = "OK"
+    if stock <= 0: estado = "SIN STOCK"
+    elif cap_usada <= 0: estado = "REVISAR: SIN CAPACIDAD"
+    elif es_numero(peso_pallet) and peso_pallet > MAX_PESO_PALLET: estado = "⚠️ PELIGRO: SOBREPESO (>1200kg)"
+    elif modo == "EXCEL" and abs(diferencia) > 0: estado = f"⚠️ EXCEL: {int(cap_excel)}u | ÓPTIMO: {cap_optima}u"
+
     return {"Capacidad_Usada": cap_usada, "Pallets": pallets, "Unidades_Ultimo": ult_unids, "Ocupacion_Ultimo": ult_pct, "Peso_Pallet": peso_pallet, "Estado": estado, "Cap_Excel": cap_excel, "Cap_Optima": cap_optima}
 
 def generar_excel_descarga(df_original, df_resultados, mapa):
@@ -435,18 +456,19 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
                             z_piso = 0 if n == 0 else (n * alt_nivel_viga)
                             for p_idx in range(pal_v):
                                 x_pal = x_pos + t_marco + holgura_lateral + (p_idx * (ap_w + holgura_lateral))
-                                id_pos = f"{letra_pasillo}-{num_modulo:02d}-{n+1}{lado}-{p_idx+1}"
+                                id_pos = f"{letra_pasillo}-{num_modulo:02d}-{n+1}{lado}"
                                 almacen.append({
                                     'id_posicion': id_pos, 'letra_pasillo': letra_pasillo, 'pasillo': num_pasillo, 'lado': lado, 'modulo': num_modulo, 'nivel': n+1, 'slot': p_idx+1,
-                                    'x': x_pos, 'y': y_rack, 'x_pal': x_pal, 'z': z_piso, 'ocupado': False, 'sku': None, 'alt_p': 0
+                                    'x': x_pos, 'y': y_rack, 'x_pal': x_pal, 'z': z_piso, 'ocupado': False, 'sku': None, 'abc': None, 'abc_xyz': None, 'alt_p': 0
                                 })
 
     almacen.sort(key=lambda x: (x['letra_pasillo'], x['nivel'], x['x'], x['y']))
     resumen_ubicacion = []
     
-    # Asignación de Pallets con Restricción de Peso de Grúa
     for _, row in df_activa.iterrows():
         sku, cant = str(row['SKU']).strip().upper(), int(row['Cantidad_Pallets'])
+        abc_c = str(row.get('ABC', 'C'))
+        abc_xyz_c = str(row.get('ABC_XYZ', abc_c + 'Z'))
         alto_real_sku = float(row['Alto_m']) if 'Alto_m' in row else ap_h
         peso_real_pallet = float(row.get('Peso_Pallet_kg', 0))
         forzar_nivel_1 = (peso_real_pallet > limite_peso_grua)
@@ -457,7 +479,7 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
             if not slot['ocupado']:
                 if forzar_nivel_1 and slot['nivel'] > 1:
                     continue
-                slot.update({'ocupado': True, 'sku': sku, 'alt_p': alto_real_sku})
+                slot.update({'ocupado': True, 'sku': sku, 'abc': abc_c, 'abc_xyz': abc_xyz_c, 'alt_p': alto_real_sku})
                 ubicados += 1
         resumen_ubicacion.append({'SKU': sku, 'Pedidas': cant, 'Ubicadas': ubicados})
 
@@ -725,7 +747,6 @@ def mostrar_cubicadora():
         if st.session_state.get('skus_invalidos'):
             st.warning(f"⚠️ Los siguientes SKUs no se encontraron en la base (o están filtrados por ABC/XYZ): {', '.join(st.session_state.skus_invalidos)}")
 
-        # Filtrar datos de la tabla para KPIs
         if st.session_state.skus_activos:
             df_kpi = df_f[df_f[MAPA['sku']].astype(str).str.upper().isin(st.session_state.skus_activos)]
             st.success(f"✅ Mostrando métricas calculadas para {len(df_kpi)} SKUs seleccionados.")
@@ -733,20 +754,47 @@ def mostrar_cubicadora():
             df_kpi = df_f
             st.info("ℹ️ Mostrando métricas globales de toda la bodega. Utiliza el buscador para analizar un listado específico.")
 
-        # Calculo de KPI central basado en la seleccion
-        tot_p = sum([calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"] for _, row in df_kpi.iterrows()])
+        # Calculo de KPIs exactos
+        tot_sku_kpi = len(df_kpi)
+        con_stock_kpi = int((pd.to_numeric(df_kpi[MAPA["stock"]], errors="coerce").fillna(0) > 0).sum())
+        tot_pallets_kpi = sum([calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"] for _, row in df_kpi.iterrows()])
         
-        col1, col2, col3 = st.columns(3)
-        col1.metric("📦 SKU Analizados", len(df_kpi))
-        col2.metric("🟢 SKUs con Stock", int((pd.to_numeric(df_kpi[MAPA["stock"]], errors="coerce").fillna(0) > 0).sum()))
-        col3.metric("🏗️ Pallets Requeridos", f"{tot_p:,}")
+        # Conteo de Alertas exactas Colab
+        alertas_activas_kpi = 0
+        for _, row in df_kpi.iterrows():
+            m_a = calcular_metricas_dinamicas(row, MAPA, modo)
+            if "EXCEL" in m_a["Estado"] or "PELIGRO" in m_a["Estado"] or "REVISAR" in m_a["Estado"]:
+                alertas_activas_kpi += 1
+
+        # DASHBOARD DARK ESTILO COLAB
+        modo_txt = "MODO EXCEL (VALORES MANUALES)" if modo == "EXCEL" else "MODO OPTIMIZADO (MÁXIMA FÍSICA)"
+        color_modo = "#3b82f6" if modo == "EXCEL" else "#f59e0b"
+        
+        st.markdown(f"""
+        <div style="font-family: 'Segoe UI', sans-serif; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08); margin-bottom: 25px;">
+            <div style="background: #1e293b; padding: 20px 25px; border-radius: 12px 12px 0 0; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h2 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 700;">WMS Analytics: Dashboard Paletizado</h2>
+                    <p style="color: #94a3b8; margin: 4px 0 0 0; font-size: 12px;">Estado: <b style="color:{color_modo};">{modo_txt}</b></p>
+                </div>
+                <div><span style="background: {color_modo}; color: white; padding: 6px 12px; border-radius: 20px; font-size: 11px; font-weight: bold; letter-spacing: 1px;">{modo}</span></div>
+            </div>
+            <div style="padding: 20px 25px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px;">
+                <div class="kpi-box" style="border-left: 4px solid #3b82f6;"><div class="kpi-title">TOTAL SKU (FILTRADO)</div><div class="kpi-value" style="color:#1e293b;">{tot_sku_kpi:,}</div></div>
+                <div class="kpi-box" style="border-left: 4px solid #10b981;"><div class="kpi-title">CON STOCK</div><div class="kpi-value" style="color:#1e293b;">{con_stock_kpi:,}</div></div>
+                <div class="kpi-box" style="border-left: 4px solid #6366f1; background:#f5f3ff;"><div class="kpi-title">PALLETS REQ.</div><div class="kpi-value" style="color:#4f46e5;">{tot_pallets_kpi:,}</div></div>
+                <div class="kpi-box" style="border-left: 4px solid #8b5cf6; background:#f5f3ff;"><div class="kpi-title">POSICIONES</div><div class="kpi-value" style="color:#7c3aed;">{tot_pallets_kpi:,}</div></div>
+                <div class="kpi-box" style="border-left: 4px solid #ef4444; background:#fef2f2;"><div class="kpi-title">ALERTAS ACTIVAS</div><div class="kpi-value" style="color:#dc2626;">{alertas_activas_kpi:,}</div></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
         st.markdown("---")
         tab_buscar, tab_descargar, tab_alertas, tab_datos = st.tabs(["🔍 Resultados Detallados", "📥 Descargar Reporte", "🚨 Ver Alertas", "📊 Base de Datos"])
 
         with tab_buscar:
             if not st.session_state.skus_activos:
-                st.markdown("<div style='text-align:center; padding: 40px; color:#64748b;'><h4>Ingresa SKUs en el buscador de arriba y haz clic en 'Calcular Selección' para ver los detalles aquí.</h4></div>", unsafe_allow_html=True)
+                st.markdown("<div style='text-align:center; padding: 30px; color:#64748b;'><h4>Ingresa SKUs en el buscador masivo de arriba y haz clic en 'Calcular Selección' para desglosar productos específicos.</h4></div>", unsafe_allow_html=True)
             else:
                 for sku in st.session_state.skus_activos:
                     filtro = df_kpi[df_kpi[MAPA["sku"]].astype(str).str.upper() == sku]
@@ -788,7 +836,7 @@ def mostrar_cubicadora():
             excel_data = generar_excel_descarga(st.session_state.df_original, df_kpi, MAPA)
             st.download_button("📊 Descargar Reporte Excel", data=excel_data, file_name="Reporte_Optimizacion.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         with tab_alertas:
-            alertas = [{"SKU": row[MAPA["sku"]], "Estado": calcular_metricas_dinamicas(row, MAPA, modo)["Estado"], "Pallets": calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"]} for _, row in df_kpi.iterrows() if "❌" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "⚠️" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "🚨" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"]]
+            alertas = [{"SKU": row[MAPA["sku"]], "Estado": calcular_metricas_dinamicas(row, MAPA, modo)["Estado"], "Pallets": calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"]} for _, row in df_kpi.iterrows() if "EXCEL" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "PELIGRO" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "REVISAR" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"]]
             if alertas: st.warning(f"Se encontraron {len(alertas)} SKUs con alertas en esta selección."); st.dataframe(pd.DataFrame(alertas), use_container_width=True)
             else: st.success("🎉 ¡Excelente! No hay alertas en tu selección.")
         with tab_datos: st.dataframe(df_kpi, use_container_width=True)
@@ -989,29 +1037,64 @@ def mostrar_layout():
         st.markdown("---")
         res = st.session_state.res_layout_actual
         
-        wms_excel = generar_wms_excel(df_orig if st.session_state.fuente_datos == 'Data Original' else df_res, res['almacen'], MAPA)
-        st.download_button("💾 Exportar Ubicaciones WMS", data=wms_excel, file_name="WMS_Ubicaciones_Bodega.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        # BARRA DE HERRAMIENTAS Y EXPORTACIÓN WMS
+        col_exp1, col_exp2 = st.columns([1, 1])
+        with col_exp1:
+            st.session_state.modo_vista_color = st.selectbox("🎨 Zonificación de Colores Racks:", ['3 Zonas (ABC)', '9 Zonas (ABC-XYZ)'], index=['3 Zonas (ABC)', '9 Zonas (ABC-XYZ)'].index(st.session_state.modo_vista_color))
+        with col_exp2:
+            st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
+            wms_excel = generar_wms_excel(df_orig if st.session_state.fuente_datos == 'Data Original' else df_res, res['almacen'], MAPA)
+            st.download_button("💾 Exportar Ubicaciones WMS (Excel)", data=wms_excel, file_name="WMS_Ubicaciones_Bodega.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
+        # PLOTLY 2D DIBUJO AJUSTADO EXACTO A COLAB
         l_m, a_m, w_puerta, flujo = st.session_state.l_bod, st.session_state.a_bod, st.session_state.ancho_porton, st.session_state.tipo_flujo
         fig_2d = go.Figure()
         fig_2d.add_shape(type="rect", x0=0, y0=0, x1=l_m, y1=a_m, line=dict(color="#2c3e50", width=4), fillcolor="#fafafa")
         
         pp_d, l_modulo = 1.2, (1.2 * st.session_state.pallets_viga) + (0.10 * (st.session_state.pallets_viga + 1)) + 0.10
+        dict_color_abc = {'A': '#e74c3c', 'B': '#f39c12', 'C': '#3498db'}
+        dict_color_abcxyz = {
+            'AX': '#900C3F', 'AY': '#C70039', 'AZ': '#FF5733',
+            'BX': '#E67E22', 'BY': '#F39C12', 'BZ': '#F1C40F',
+            'CX': '#2E86C1', 'CY': '#3498DB', 'CZ': '#85C1E9'
+        }
+
         path_free, path_block, path_pil = [], [], []
+        p_racks = {k: [] for k in list(dict_color_abc.keys()) + list(dict_color_abcxyz.keys())}
         
         for mod in res['modulos_list']:
             x_pos, y_rack = mod['x'], mod['y']
             rx0, ry0, rx1, ry1 = (y_rack, x_pos, y_rack+pp_d, x_pos+l_modulo) if res['is_vertical'] else (x_pos, y_rack, x_pos+l_modulo, y_rack+pp_d)
             path = f"M {rx0} {ry0} L {rx1} {ry0} L {rx1} {ry1} L {rx0} {ry1} Z"
-            if mod['bloqueado']: path_block.append(path)
-            else: path_free.append(path)
+            
+            if mod['bloqueado']:
+                path_block.append(path)
+            else:
+                if '9 Zonas' in st.session_state.modo_vista_color:
+                    abcs_aqui = [s['abc_xyz'] for s in res['almacen'] if s['x']==x_pos and s['y']==y_rack and s['ocupado']]
+                else:
+                    abcs_aqui = [s['abc'] for s in res['almacen'] if s['x']==x_pos and s['y']==y_rack and s['ocupado']]
+                
+                clase = min(abcs_aqui) if abcs_aqui else None
+                if clase and clase in p_racks:
+                    p_racks[clase].append(path)
+                else:
+                    path_free.append(path)
 
         for px, py in res['pilares_reales']:
             rx0, ry0, rx1, ry1 = (py-0.25, px-0.25, py+0.25, px+0.25) if res['is_vertical'] else (px-0.25, py-0.25, px+0.25, py+0.25)
             path_pil.append(f"M {rx0} {ry0} L {rx1} {ry0} L {rx1} {ry1} L {rx0} {ry1} Z")
 
-        if path_free: fig_2d.add_shape(type="path", path=" ".join(path_free), fillcolor="#3498db", line=dict(color="#2980b9", width=1))
+        if path_free: fig_2d.add_shape(type="path", path=" ".join(path_free), fillcolor="#ecf0f1", line=dict(color="#bdc3c7", width=1))
         if path_block: fig_2d.add_shape(type="path", path=" ".join(path_block), fillcolor="#95a5a6", line=dict(color="#7f8c8d", width=1))
+        
+        if '9 Zonas' in st.session_state.modo_vista_color:
+            for c_k, color in dict_color_abcxyz.items():
+                if p_racks[c_k]: fig_2d.add_shape(type="path", path=" ".join(p_racks[c_k]), fillcolor=color, line=dict(color="#2c3e50", width=1))
+        else:
+            for c_k, color in dict_color_abc.items():
+                if p_racks[c_k]: fig_2d.add_shape(type="path", path=" ".join(p_racks[c_k]), fillcolor=color, line=dict(color="#2c3e50", width=1))
+
         if path_pil: fig_2d.add_shape(type="path", path=" ".join(path_pil), fillcolor="#e74c3c", line=dict(color="#c0392b", width=1.5))
         
         for st_z in res['staging']: fig_2d.add_shape(type="rect", x0=st_z['x1'], y0=st_z['y1'], x1=st_z['x2'], y1=st_z['y2'], fillcolor="rgba(241, 196, 15, 0.4)", line=dict(color="#f39c12", width=2))
@@ -1032,7 +1115,13 @@ def mostrar_layout():
             fig_2d.add_shape(type="rect", x0=x0, y0=y0, x1=x1, y1=y1, fillcolor="#f1c40f", line=dict(color="#f39c12", width=2))
             fig_2d.add_annotation(x=ax, y=ay, text=f"<b>{label}</b>", showarrow=False, font=dict(size=11, color="black"))
 
-        fig_2d.update_layout(title="Plano CAD 2D del Centro de Distribución", xaxis=dict(range=[-2, l_m+2]), yaxis=dict(range=[-2, a_m+2], scaleanchor="x", scaleratio=1), height=600, margin=dict(l=0, r=0, t=40, b=0))
+        # FIX DE EJES PARA EVITAR QUE SE ENCOJA LA IMAGEN
+        fig_2d.update_layout(
+            title="Plano CAD 2D del Centro de Distribución (Zonificación Racks)",
+            xaxis=dict(title="Largo (m)", range=[-3, l_m + 3], zeroline=False),
+            yaxis=dict(title="Ancho (m)", range=[-3, a_m + 3], zeroline=False, scaleanchor="x", scaleratio=1),
+            height=650, margin=dict(l=20, r=20, t=50, b=20), plot_bgcolor="#ffffff"
+        )
         st.plotly_chart(fig_2d, use_container_width=True)
 
         st.markdown("<hr>", unsafe_allow_html=True)
@@ -1077,7 +1166,7 @@ def mostrar_analytics():
     ahorro_pallets = tot_pallets_excel - tot_pallets_opt
     pct_ahorro = (ahorro_pallets / tot_pallets_excel * 100) if tot_pallets_excel > 0 else 0
     vol_total_bodega = df_res['Volumen_Total_M3'].sum()
-    num_alertas = sum(1 for m in metrics_excel if "❌" in m["Estado"] or "⚠️" in m["Estado"] or "🚨" in m["Estado"])
+    num_alertas = sum(1 for m in metrics_excel if "EXCEL" in m["Estado"] or "PELIGRO" in m["Estado"] or "REVISAR" in m["Estado"])
 
     cap_bodega_slots = st.session_state.kpi_layout_capacidad
     pallets_ubicados = st.session_state.kpi_layout_ubicados
@@ -1153,7 +1242,7 @@ st.session_state.menu_seleccion = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v6.3 • Fast Engine")
+st.sidebar.caption("WMS Analytics Hub v6.4 • Full Parity")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
