@@ -28,7 +28,7 @@ if "df_original" not in st.session_state: st.session_state.df_original = None
 if "df_resultados" not in st.session_state: st.session_state.df_resultados = None
 if "mapa_columnas" not in st.session_state: st.session_state.mapa_columnas = None
 
-# Memoria Layout (Coincidiendo exacto con Colab)
+# Memoria Layout
 parametros_layout = {
     'l_bod': 50.0, 'a_bod': 40.0, 'alt_bod': 7.0,
     'cant_pilares_x': 4, 'cant_pilares_y': 1, 'dist_pilares_x': 20.0, 'dist_pilares_y': 15.0,
@@ -424,6 +424,12 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     pilares_reales = [(px * dp_x_real, py * dp_y_real) for px in range(1, nx + 1) for py in range(1, ny + 1)]
     virt_pilares = [(py, px) for px, py in pilares_reales] if is_vertical else pilares_reales
     
+    # CORRECCIÓN DE COLORES Y SLOT: Ordenar df_activa categóricamente ANTES de asignar a los racks
+    if 'ABC_XYZ' in df_activa.columns:
+        cat_type = pd.CategoricalDtype(categories=['AX', 'AY', 'AZ', 'BX', 'BY', 'BZ', 'CX', 'CY', 'CZ'], ordered=True)
+        df_activa['ABC_XYZ'] = df_activa['ABC_XYZ'].astype(cat_type)
+        df_activa = df_activa.sort_values(by='ABC_XYZ')
+
     modulos_validos = 0
     modulos_list = []
     almacen = []
@@ -501,7 +507,6 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
         'pp_d': pp_d, 'ap_w': ap_w, 'viga_h': viga_h, 'is_vertical': is_vertical
     }
 
-# CLASE MALLA AGRUPADA UNIFICADA CON COLAB (Con soporte de Hover Text)
 class MallaAgrupada:
     def __init__(self, color, nombre, opacidad=1.0):
         self.color, self.nombre, self.opacidad = color, nombre, opacidad
@@ -546,16 +551,15 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas,
         'CX': '#2E86C1', 'CY': '#3498DB', 'CZ': '#85C1E9'
     }
 
-    # Normalizar skus_buscados para ignorar la palabra "TODOS"
     if skus_buscados and 'TODOS' in skus_buscados:
         skus_buscados = set()
 
     capa_pilares = MallaAgrupada('#e74c3c', 'Pilares CD')
     capa_oficinas = MallaAgrupada('#bdc3c7', 'Oficinas', 0.9)
     capa_staging = MallaAgrupada('#f39c12', 'Staging', 0.4)
-    capa_marcos = MallaAgrupada('#2c3e50', 'Estructura Rack', 1.0)
-    capa_marcos_bloqueados = MallaAgrupada('#7f8c8d', 'Rack Inutilizable', 0.4)
-    capa_vigas = MallaAgrupada('#e67e22', 'Vigas', 1.0)
+    capa_marcos = MallaAgrupada('#2c3e50', 'Rack', 0.1 if skus_buscados else 1.0)
+    capa_marcos_bloqueados = MallaAgrupada('#7f8c8d', 'Rack Inactivo', 0.4)
+    capa_vigas = MallaAgrupada('#e67e22', 'Vigas', 0.1 if skus_buscados else 1.0)
     
     capa_maderas = MallaAgrupada('#d35400', 'Pallet Base', 1.0)
     capa_maderas_apagadas = MallaAgrupada('#bdc3c7', 'Pallet Oculto', 0.1)
@@ -592,7 +596,6 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas,
             add_cube_rotated(c_viga, x_pos + t, y_rack, z_v, res['l_modulo'] - 2*t, t/2, res['viga_h'], is_vertical)
             add_cube_rotated(c_viga, x_pos + t, y_rack + res['pp_d'] - t/2, z_v, res['l_modulo'] - 2*t, t/2, res['viga_h'], is_vertical)
 
-    # DIBUJO DE PALLETS Y CAJAS 3D (Zonificación por colores o Aislamiento de SKU)
     for slot in res['almacen']:
         if slot['ocupado']:
             alt_carga = slot['alt_p'] - 0.12
@@ -640,7 +643,7 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas,
             c_puertas_marcos.agregar_cubo(0, pos, alt_puerta, 0.3, w, 0.4)
 
     fig_3d = go.Figure()
-    fig_3d.add_trace(go.Mesh3d(x=[0, l_m, l_m, 0, 0, l_m, l_m, 0], y=[0, 0, a_m, a_m, 0, 0, a_m, a_m], z=[-0.1, -0.1, -0.1, -0.1, 0, 0, 0, 0], i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2], j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3], k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6], color='#bdc3c7', showscale=False, name='Suelo'))
+    fig_3d.add_trace(go.Mesh3d(x=[0, l_m, l_m, 0, 0, l_m, l_m, 0], y=[0, 0, a_m, a_m, 0, 0, a_m, a_m], z=[-0.1, -0.1, -0.1, -0.1, 0, 0, 0, 0], i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2], j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3], k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6], color='#ecf0f1', showscale=False, name='Suelo'))
 
     for c in [capa_pilares, capa_oficinas, capa_staging, capa_marcos, capa_marcos_bloqueados, capa_vigas, capa_maderas, capa_maderas_apagadas] + list(cajas.values()) + [c_puertas_cortina, c_puertas_marcos]:
         trace = c.obtener_trazo()
@@ -1331,7 +1334,7 @@ st.session_state.menu_seleccion = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.caption("WMS Analytics Hub v6.5 • Full Parity 3D Fix")
+st.sidebar.caption("WMS Analytics Hub v6.6 • Slotting Engine Fix")
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
