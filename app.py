@@ -226,6 +226,7 @@ def get_material_css(f):
     return {"bg_top": "linear-gradient(135deg, #e5c07b, #c6893f)", "bg_side": "linear-gradient(to bottom, #d4a373, #a67232)", "border": "#8b5a2b", "radius": "2px", "shadow": "inset -2px -2px 4px rgba(0,0,0,0.2), inset 1px 1px 2px rgba(255,255,255,0.3), 2px 3px 5px rgba(0,0,0,0.2)"}
 
 def html_vista_superior(fila, mapa, cantidad_unidades=None):
+    if cantidad_unidades is not None and int(cantidad_unidades) <= 0: return "<div style='text-align:center; padding:30px; font-weight:bold; color:#cbd5e1;'>Pallet Vacío</div>"
     lp, ap = a_float(valor_col(fila, "largo_pallet", mapa), 120), a_float(valor_col(fila, "ancho_pallet", mapa), 120)
     layout = mejor_distribucion_filas(a_float(valor_col(fila, "largo", mapa)), a_float(valor_col(fila, "ancho", mapa)), lp, ap)
     if layout["cantidad"] <= 0: return "<div style='text-align:center; padding:30px;'>Faltan dimensiones.</div>"
@@ -235,6 +236,7 @@ def html_vista_superior(fila, mapa, cantidad_unidades=None):
     return f"<div style='position:relative; width:{lp*escala + 30:.2f}px; height:{ap*escala + 30:.2f}px; margin: 10px auto;'><div class='cota-linea' style='top: 0; left: 0; width: {lp*escala}px; height: 10px;'><span class='cota-texto'>{fmt(lp,0)} cm</span></div><div class='cota-linea-v' style='top: 15px; right: 0; width: 10px; height: {ap*escala}px;'><span class='cota-texto' style='transform: rotate(90deg); white-space:nowrap;'>{fmt(ap,0)} cm</span></div><div style='position:absolute; top:15px; left:0; width:{lp*escala:.2f}px; height:{ap*escala:.2f}px; background-color:#d39e66; background-image:repeating-linear-gradient(90deg,transparent,transparent 15%,rgba(100,50,0,0.15) 15%,rgba(100,50,0,0.15) 17%); box-shadow:4px 6px 12px rgba(0,0,0,0.25); border:2px solid #8b5a2b; border-radius:4px;'>{''.join(objs)}</div></div>"
 
 def html_vista_lateral(fila, mapa, cap_usada, total_unidades=None):
+    if total_unidades is not None and int(total_unidades) <= 0: return "<div style='text-align:center; padding:30px; font-weight:bold; color:#cbd5e1;'>Pallet Vacío</div>"
     lp, hp, ap = a_float(valor_col(fila, "largo_pallet", mapa), 120), a_float(valor_col(fila, "altura_pallet", mapa), 15), a_float(valor_col(fila, "ancho_pallet", mapa), 120)
     alto, alt_t, largo, ancho = a_float(valor_col(fila, "alto", mapa)), a_float(valor_col(fila, "altura_total", mapa)), a_float(valor_col(fila, "largo", mapa)), a_float(valor_col(fila, "ancho", mapa))
     if not all([es_numero(x) and x > 0 for x in [lp, hp, alto]]): return "<div style='text-align:center; padding:30px;'>Faltan datos.</div>"
@@ -635,12 +637,19 @@ def mostrar_cubicadora():
                                 with c_pb3: 
                                     if mostrar_3d_sku: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada']), use_container_width=True, key=f"pb_{sku}")
                                     else: st.markdown("<div style='height:200px; display:flex; align-items:center; justify-content:center; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:8px; color:#94a3b8; font-size:11px; font-weight:bold;'>Activa el botón 'Levantar Maqueta 3D' para renderizar.</div>", unsafe_allow_html=True)
-                                st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
-                                c_ps1, c_ps2, c_ps3 = st.columns(3)
-                                with c_ps1: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#0284c7; margin-bottom:5px;'>PLANTA PALLET SOBRANTE</div>", unsafe_allow_html=True); st.markdown(html_vista_superior(fila, MAPA, m['Unidades_Sobrante']), unsafe_allow_html=True)
-                                with c_ps2: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#0284c7; margin-bottom:5px;'>ALZADO PALLET SOBRANTE</div>", unsafe_allow_html=True); st.markdown(html_vista_lateral(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Sobrante']), unsafe_allow_html=True)
-                                with c_ps3: 
-                                    if mostrar_3d_sku: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Sobrante']), use_container_width=True, key=f"ps_{sku}")
+                                
+                                # LÓGICA DE SOBRANTES CORREGIDA: Solo se dibuja si de verdad hay unidades sobrantes (> 0)
+                                if m['Unidades_Sobrante'] > 0:
+                                    st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+                                    c_ps1, c_ps2, c_ps3 = st.columns(3)
+                                    with c_ps1: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#0284c7; margin-bottom:5px;'>PLANTA PALLET SOBRANTE</div>", unsafe_allow_html=True); st.markdown(html_vista_superior(fila, MAPA, m['Unidades_Sobrante']), unsafe_allow_html=True)
+                                    with c_ps2: st.markdown(f"<div style='font-size:10px; text-align:center; font-weight:800; color:#0284c7; margin-bottom:5px;'>ALZADO PALLET SOBRANTE</div>", unsafe_allow_html=True); st.markdown(html_vista_lateral(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Sobrante']), unsafe_allow_html=True)
+                                    with c_ps3: 
+                                        if mostrar_3d_sku: st.plotly_chart(renderizar_3d_plotly(fila, MAPA, m['Capacidad_Usada'], m['Unidades_Sobrante']), use_container_width=True, key=f"ps_{sku}")
+                                else:
+                                    st.markdown("<hr style='margin:10px 0;'>", unsafe_allow_html=True)
+                                    st.markdown("<div style='text-align:center; padding: 15px; background: #f0fdf4; border: 1px dashed #bbf7d0; border-radius: 8px; color: #166534; font-size: 13px; font-weight: bold;'>✅ Todos los pallets están 100% completos. No hay unidades sueltas o sobrantes para este SKU.</div>", unsafe_allow_html=True)
+                                    
                                 st.markdown("</div>", unsafe_allow_html=True)
                         elif mostrar_graf and MAPA.get('is_opt_report'):
                             col_izq, col_der = st.columns([1, 3])
