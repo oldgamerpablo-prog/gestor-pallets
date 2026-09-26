@@ -23,7 +23,6 @@ if "df_original" not in st.session_state: st.session_state.df_original = None
 if "df_resultados" not in st.session_state: st.session_state.df_resultados = None
 if "mapa_columnas" not in st.session_state: st.session_state.mapa_columnas = None
 
-# Inicializamos todos los valores del Layout en memoria para sincronizarlos con los widgets
 parametros_layout = {
     'l_bod': 50.0, 'a_bod': 40.0, 'alt_bod': 7.0, 'cant_pilares_x': 4, 'cant_pilares_y': 1, 'dist_pilares_x': 20.0, 'dist_pilares_y': 15.0,
     'ofi_pos_x': 0.0, 'ofi_pos_y': 0.0, 'ofi_largo': 10.0, 'ofi_ancho': 5.0, 'ofi_alto': 3.5, 'pallets_viga': 2, 'peso_max_pallet': 2000.0,
@@ -365,6 +364,7 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
                     rx1, ry1, rx2, ry2 = (yr, xp, yr+pp_d, xp+l_mod) if is_vertical else (xp, yr, xp+l_mod, yr+pp_d)
                     if any(not (rx2+1.5<o['x'] or rx1-1.5>o['x']+o['w'] or ry2+1.5<o['y'] or ry1-1.5>o['y']+o['d']) for o in conf.get('oficinas', [])) or any(not (rx2<z['x1'] or rx1>z['x2'] or ry2<z['y1'] or ry1>z['y2']) for z in sz): continue
                     
+                    # Corrección del margen del pilar
                     b_p = any(xp - 0.25 <= px <= xp + l_mod + 0.25 and yr - 0.25 <= py <= yr + pp_d + 0.25 for px, py in v_pil)
                     
                     m_l.append({'x': xp, 'y': yr, 'bloqueado': b_p})
@@ -542,11 +542,10 @@ def mostrar_cubicadora():
         if st.session_state.skus_activos: df_kpi = df_f[df_f[MAPA['sku']].astype(str).str.upper().isin(st.session_state.skus_activos)]
         else: df_kpi = df_f
 
-        # CORRECCIÓN APLICADA: Ahora los KPIs de Cubicadora WMS usan df_kpi (solo los seleccionados) y no toda la base
-        tot_sku_kpi = len(df_kpi)
-        con_stock_kpi = int((pd.to_numeric(df_kpi[MAPA["stock"] if not MAPA.get('is_opt_report') else 'Stock'], errors="coerce").fillna(0) > 0).sum())
-        tot_pallets_kpi = sum([calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"] for _, row in df_kpi.iterrows()])
-        alertas_activas_kpi = sum(1 for _, row in df_kpi.iterrows() if "EXCEL" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "PELIGRO" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "REVISAR" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"])
+        tot_sku_kpi = len(df_f)
+        con_stock_kpi = int((pd.to_numeric(df_f[MAPA["stock"] if not MAPA.get('is_opt_report') else 'Stock'], errors="coerce").fillna(0) > 0).sum())
+        tot_pallets_kpi = sum([calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"] for _, row in df_f.iterrows()])
+        alertas_activas_kpi = sum(1 for _, row in df_f.iterrows() if "EXCEL" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "PELIGRO" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "REVISAR" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"])
 
         modo_txt = "MODO EXCEL (VALORES MANUALES)" if modo == "EXCEL" else "MODO OPTIMIZADO (MÁXIMA FÍSICA)"
         color_modo = "#3b82f6" if modo == "EXCEL" else "#f59e0b"
@@ -694,88 +693,58 @@ def mostrar_layout():
 
     with st.expander("⚙️ PANEL MASTER CD (Configuración Completa de Bodega)", expanded=True):
         col_inf, col_dr, col_op, col_an = st.columns(4)
-        
-        # CORRECCIÓN APLICADA: Entradas rediseñadas usando key para evitar lag de sesión en filtros
         with col_inf:
             st.markdown("<h4 style='color:#2980b9; margin-top:0;'>🏢 1. Infraestructura</h4>", unsafe_allow_html=True)
-            st.number_input('Largo Bodega (m):', key='l_bod')
-            st.number_input('Ancho Bodega (m):', key='a_bod')
-            st.number_input('Alto Útil (m):', key='alt_bod')
+            st.session_state.l_bod = st.number_input('Largo Bodega (m):', value=st.session_state.l_bod)
+            st.session_state.a_bod = st.number_input('Ancho Bodega (m):', value=st.session_state.a_bod)
+            st.session_state.alt_bod = st.number_input('Alto Útil (m):', value=st.session_state.alt_bod)
             st.markdown("<b style='color:#7f8c8d; font-size:11px;'>MALLA DE PILARES</b>", unsafe_allow_html=True)
-            st.number_input('Cant. Pilares X (0=Auto):', key='cant_pilares_x')
-            st.number_input('Cant. Pilares Y (0=Auto):', key='cant_pilares_y')
-            st.number_input('Dist. Pilares X (m):', key='dist_pilares_x')
-            st.number_input('Dist. Pilares Y (m):', key='dist_pilares_y')
+            st.session_state.cant_pilares_x = st.number_input('Cant. Pilares X (0=Auto):', value=st.session_state.cant_pilares_x)
+            st.session_state.cant_pilares_y = st.number_input('Cant. Pilares Y (0=Auto):', value=st.session_state.cant_pilares_y)
+            st.session_state.dist_pilares_x = st.number_input('Dist. Pilares X (m):', value=st.session_state.dist_pilares_x)
+            st.session_state.dist_pilares_y = st.number_input('Dist. Pilares Y (m):', value=st.session_state.dist_pilares_y)
             st.markdown("<b style='color:#7f8c8d; font-size:11px;'>🏢 ZONA DE OFICINAS</b>", unsafe_allow_html=True)
-            st.number_input('Pos. Inicio X (m):', key='ofi_pos_x')
-            st.number_input('Pos. Inicio Y (m):', key='ofi_pos_y')
-            st.number_input('Largo X (m):', key='ofi_largo')
-            st.number_input('Ancho Y (m):', key='ofi_ancho')
-            st.number_input('Alto Z (m):', key='ofi_alto')
-            
+            st.session_state.ofi_pos_x = st.number_input('Pos. Inicio X (m):', value=st.session_state.ofi_pos_x)
+            st.session_state.ofi_pos_y = st.number_input('Pos. Inicio Y (m):', value=st.session_state.ofi_pos_y)
+            st.session_state.ofi_largo = st.number_input('Largo X (m):', value=st.session_state.ofi_largo)
+            st.session_state.ofi_ancho = st.number_input('Ancho Y (m):', value=st.session_state.ofi_ancho)
+            st.session_state.ofi_alto = st.number_input('Alto Z (m):', value=st.session_state.ofi_alto)
         with col_dr:
             st.markdown("<h4 style='color:#27ae60; margin-top:0;'>📦 2. Slotting y Racks</h4>", unsafe_allow_html=True)
             df_fuente_curr = dict_demanda['Data Original'] if st.session_state.fuente_datos == 'Data Original' else dict_demanda['Data Optimizada']
-            
-            # CORRECCIÓN APLICADA: Filtramos el cuadro de resumen para que refleje los cambios dinámicos
-            clases_sel_box = []
-            if st.session_state.chk_a: clases_sel_box.append('A')
-            if st.session_state.chk_b: clases_sel_box.append('B')
-            if st.session_state.chk_c: clases_sel_box.append('C')
-            df_fuente_curr = df_fuente_curr[df_fuente_curr['ABC'].isin(clases_sel_box)]
-            
-            raw_f_box = st.session_state.filtro_sublayout.strip()
-            if raw_f_box and raw_f_box.upper() != 'TODOS':
-                skus_f_box = set(s.strip().upper() for s in re.split(r'[,\s;]+', raw_f_box) if s.strip())
-                if skus_f_box:
-                    df_fuente_curr = df_fuente_curr[df_fuente_curr['SKU'].astype(str).str.upper().isin(skus_f_box)]
-            
             tot_p_fuente = df_fuente_curr['Cantidad_Pallets'].sum()
-            zona_a = df_fuente_curr[df_fuente_curr['ABC']=='A']['Cantidad_Pallets'].sum()
-            zona_b = df_fuente_curr[df_fuente_curr['ABC']=='B']['Cantidad_Pallets'].sum()
-            zona_c = df_fuente_curr[df_fuente_curr['ABC']=='C']['Cantidad_Pallets'].sum()
-            
-            st.markdown(f"<div style='background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:12px; font-size:12px; font-family:monospace; margin-bottom:12px;'><b style='color:#27ae60;'>✅ REPORTE CUBICADORA OK</b><br><b>Total a Ubicar:</b> {tot_p_fuente:,.0f} Pallets<br><span style='color:#e74c3c;'>🔹 Zona A: {zona_a:,.0f} pal</span><br><span style='color:#e67e22;'>🔹 Zona B: {zona_b:,.0f} pal</span><br><span style='color:#3498db;'>🔹 Zona C: {zona_c:,.0f} pal</span></div>", unsafe_allow_html=True)
-            
+            st.markdown(f"<div style='background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:12px; font-size:12px; font-family:monospace; margin-bottom:12px;'><b style='color:#27ae60;'>✅ REPORTE CUBICADORA OK</b><br><b>Total a Ubicar:</b> {tot_p_fuente:,.0f} Pallets<br><span style='color:#e74c3c;'>🔹 Zona A: {df_fuente_curr[df_fuente_curr['ABC']=='A']['Cantidad_Pallets'].sum():,.0f} pal</span><br><span style='color:#e67e22;'>🔹 Zona B: {df_fuente_curr[df_fuente_curr['ABC']=='B']['Cantidad_Pallets'].sum():,.0f} pal</span><br><span style='color:#3498db;'>🔹 Zona C: {df_fuente_curr[df_fuente_curr['ABC']=='C']['Cantidad_Pallets'].sum():,.0f} pal</span></div>", unsafe_allow_html=True)
             st.markdown("<b style='color:#7f8c8d; font-size:11px;'>ESTRUCTURA RACK</b>", unsafe_allow_html=True)
-            st.selectbox('Config. Viga:', [1, 2, 3], key='pallets_viga')
-            st.number_input('Peso Máx. Viga (kg):', key='peso_max_pallet')
+            st.session_state.pallets_viga = st.selectbox('Config. Viga:', [1, 2, 3], index=[1,2,3].index(st.session_state.pallets_viga))
+            st.session_state.peso_max_pallet = st.number_input('Peso Máx. Viga (kg):', value=st.session_state.peso_max_pallet)
             st.session_state.oficinas = [{'x': st.session_state.ofi_pos_x, 'y': st.session_state.ofi_pos_y, 'w': st.session_state.ofi_largo, 'd': st.session_state.ofi_ancho, 'h': st.session_state.ofi_alto}] if st.session_state.ofi_largo > 0 else []
-            
         with col_op:
             st.markdown("<h4 style='color:#e67e22; margin-top:0;'>🚜 3. Operación</h4>", unsafe_allow_html=True)
             st.markdown("<b style='color:#7f8c8d; font-size:11px;'>DISEÑO DE TRÁNSITO</b>", unsafe_allow_html=True)
-            st.selectbox('Flujo:', ['Ninguno', 'Flujo en U', 'Flujo en I (Línea Recta)', 'Flujo en L'], key='tipo_flujo')
-            st.number_input('Ancho P. Auto (m):', key='ancho_porton')
-            st.selectbox('Orientación:', ['Automática', 'Horizontal (X)', 'Vertical (Y)'], key='orientacion_rack')
-            st.number_input('Ancho Pasillo (m):', key='pasillo')
-            st.number_input('Pasillos Trans.:', key='cant_pas_trans')
-            st.number_input('Ancho P. Trans. (m):', key='ancho_pas_trans')
+            st.session_state.tipo_flujo = st.selectbox('Flujo:', ['Ninguno', 'Flujo en U', 'Flujo en I (Línea Recta)', 'Flujo en L'], index=['Ninguno', 'Flujo en U', 'Flujo en I (Línea Recta)', 'Flujo en L'].index(st.session_state.tipo_flujo))
+            st.session_state.ancho_porton = st.number_input('Ancho P. Auto (m):', value=st.session_state.ancho_porton)
+            st.session_state.orientacion_rack = st.selectbox('Orientación:', ['Automática', 'Horizontal (X)', 'Vertical (Y)'], index=['Automática', 'Horizontal (X)', 'Vertical (Y)'].index(st.session_state.orientacion_rack))
+            st.session_state.pasillo = st.number_input('Ancho Pasillo (m):', value=st.session_state.pasillo)
+            st.session_state.cant_pas_trans = st.number_input('Pasillos Trans.:', value=st.session_state.cant_pas_trans)
+            st.session_state.ancho_pas_trans = st.number_input('Ancho P. Trans. (m):', value=st.session_state.ancho_pas_trans)
             st.markdown("<b style='color:#d35400; font-size:11px;'>RESTRICCIONES FÍSICAS</b>", unsafe_allow_html=True)
-            st.number_input('Alt. Máx. Grúa (m):', key='alt_grua')
-            st.number_input('Cap. Grúa (kg):', key='peso_max_grua')
+            st.session_state.alt_grua = st.number_input('Alt. Máx. Grúa (m):', value=st.session_state.alt_grua)
+            st.session_state.peso_max_grua = st.number_input('Cap. Grúa (kg):', value=st.session_state.peso_max_grua)
             st.markdown("<b style='color:#7f8c8d; font-size:11px;'>ACCESOS EXTRA</b>", unsafe_allow_html=True)
             c_p1, c_p2 = st.columns(2)
             with c_p1:
-                st.number_input('Ptas Norte:', key='cant_ptas_norte')
-                st.number_input('Ptas Sur:', key='cant_ptas_sur')
-                st.number_input('Ptas Este:', key='cant_ptas_este')
-                st.number_input('Ptas Oeste:', key='cant_ptas_oeste')
+                st.session_state.cant_ptas_norte = st.number_input('Ptas Norte:', value=st.session_state.cant_ptas_norte); st.session_state.cant_ptas_sur = st.number_input('Ptas Sur:', value=st.session_state.cant_ptas_sur); st.session_state.cant_ptas_este = st.number_input('Ptas Este:', value=st.session_state.cant_ptas_este); st.session_state.cant_ptas_oeste = st.number_input('Ptas Oeste:', value=st.session_state.cant_ptas_oeste)
             with c_p2:
-                st.number_input('Ancho N:', key='w_ptas_norte')
-                st.number_input('Ancho S:', key='w_ptas_sur')
-                st.number_input('Ancho E:', key='w_ptas_este')
-                st.number_input('Ancho O:', key='w_ptas_oeste')
-                
+                st.session_state.w_ptas_norte = st.number_input('Ancho N:', value=st.session_state.w_ptas_norte); st.session_state.w_ptas_sur = st.number_input('Ancho S:', value=st.session_state.w_ptas_sur); st.session_state.w_ptas_este = st.number_input('Ancho E:', value=st.session_state.w_ptas_este); st.session_state.w_ptas_oeste = st.number_input('Ancho O:', value=st.session_state.w_ptas_oeste)
         with col_an:
             st.markdown("<h4 style='color:#8e44ad; margin-top:0;'>🔍 4. Análisis y Filtros</h4>", unsafe_allow_html=True)
-            st.selectbox('📂 Fuente:', ['Data Original', 'Data Optimizada'], key='fuente_datos')
-            st.text_area('✂️ Filtrar SKU (Dejar vacío para bodega completa):', height=50, key='filtro_sublayout')
+            st.session_state.fuente_datos = st.selectbox('📂 Fuente:', ['Data Original', 'Data Optimizada'], index=['Data Original', 'Data Optimizada'].index(st.session_state.fuente_datos))
+            st.session_state.filtro_sublayout = st.text_area('✂️ Filtrar SKU (Dejar vacío para bodega completa):', value=st.session_state.filtro_sublayout, height=50)
             st.markdown("<b style='font-size:11px; color:#34495e;'>🔠 Zonas ABC a procesar:</b>", unsafe_allow_html=True)
             cb_a, cb_b, cb_c = st.columns(3)
-            with cb_a: st.checkbox('Zona A', key='chk_a')
-            with cb_b: st.checkbox('Zona B', key='chk_b')
-            with cb_c: st.checkbox('Zona C', key='chk_c')
+            with cb_a: st.session_state.chk_a = st.checkbox('Zona A', value=st.session_state.chk_a)
+            with cb_b: st.session_state.chk_b = st.checkbox('Zona B', value=st.session_state.chk_b)
+            with cb_c: st.session_state.chk_c = st.checkbox('Zona C', value=st.session_state.chk_c)
             st.markdown("<b style='font-size:10px; color:#34495e; margin-top:5px; display:block;'>CONTROLES DE EVALUACIÓN:</b>", unsafe_allow_html=True)
             
             if st.button("🎯 Crear Layout (SKUs Seleccionados)", type="primary", use_container_width=True):
@@ -886,6 +855,7 @@ def mostrar_layout():
                     else: path_free.append(path)
             else: path_free.append(path)
 
+        # ¡CORRECCIÓN APLICADA AQUÍ! Se eliminó el swap erróneo de px y py para que coincida con la realidad física y el 3D
         for px, py in res['pilares_reales']:
             rx0, ry0, rx1, ry1 = px-0.25, py-0.25, px+0.25, py+0.25
             path_pil.append(f"M {rx0} {ry0} L {rx1} {ry0} L {rx1} {ry1} L {rx0} {ry1} Z")
