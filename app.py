@@ -1,6 +1,6 @@
 # ============================================================
 # MAIN DASHBOARD Y SISTEMA WMS - CÓDIGO COMPLETO Y ACTUALIZADO
-# Rama: desarrollo | Incluye: Gemelo Digital HD Interactivo, Layout & Analytics
+# Rama: desarrollo | Incluye: Gemelo Digital HD WebGL, Analytics & Buscador
 # ============================================================
 
 import base64
@@ -77,7 +77,6 @@ parametros_layout = {
     "chk_b": True,
     "chk_c": True,
     "modo_vista_color": "3 Zonas (ABC)",
-    "motor_3d_layout": "Three.js WebGL (HD Completo)",
 }
 for k, v in parametros_layout.items():
   if k not in st.session_state:
@@ -87,8 +86,6 @@ if "layout_generado" not in st.session_state:
   st.session_state.layout_generado = False
 if "res_layout_actual" not in st.session_state:
   st.session_state.res_layout_actual = None
-if "mostrar_3d_layout" not in st.session_state:
-  st.session_state.mostrar_3d_layout = False
 if "kpi_layout_capacidad" not in st.session_state:
   st.session_state.kpi_layout_capacidad = 0
 if "kpi_layout_ubicados" not in st.session_state:
@@ -391,62 +388,6 @@ def html_vista_lateral(fila, mapa, cap_usada, total_unidades=None):
   bloques += [f"<div class='box-3d' style='position:absolute; left:{i*cw:.2f}px; bottom:{hp*ey + niv_c*ch:.2f}px; width:{cw-1:.2f}px; height:{ch-1:.2f}px; box-sizing:border-box; background:{mat['bg_side']}; border:1px solid {mat['border']}; border-radius:{mat['radius']}; box-shadow:inset 1px 1px 2px rgba(255,255,255,0.2), 2px 2px 4px rgba(0,0,0,0.3);'></div>" for i in range(c_top if c_top > 0 else (1 if u_sob > 0 else 0))]
   return f"<div style='position:relative; width:{lp*ex + 40:.2f}px; height:{alto_v*ey + 30:.2f}px; margin: 10px auto;'><div class='cota-linea-v' style='bottom: 0; left: 0; width: 10px; height: {alto_v*ey}px;'><span class='cota-texto' style='transform: rotate(-90deg); white-space:nowrap;'>{fmt(alto_v,0)} cm</span></div><div style='position:absolute; left:25px; bottom:0; width:{lp*ex:.2f}px; height:{alto_v*ey:.2f}px;'><div style='position:absolute; left:0; bottom:0; width:{lp*ex:.2f}px; height:{hp*ey:.2f}px; background:#b88252; border:1px solid #754b28; border-radius:2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3);'><div style='position:absolute; left:18%; bottom:15%; width:22%; height:70%; background:#2c1b12; border-radius:2px;'></div><div style='position:absolute; right:18%; bottom:15%; width:22%; height:70%; background:#2c1b12; border-radius:2px;'></div></div>{''.join(bloques)}<div style='position:absolute; left:0; bottom:{alto_v*ey:.2f}px; width:110%; border-top:2px dashed #ef4444; z-index:20;'></div><div style='position:absolute; right:-25px; bottom:{alto_v*ey-10:.2f}px; font-size:10px; color:#ef4444; font-weight:700;'>MÁX</div></div></div>"
 
-class MallaAgrupada:
-  def __init__(self, color, nombre, opacidad=1.0):
-    self.color, self.nombre, self.opacidad = color, nombre, opacidad
-    self.x, self.y, self.z, self.i, self.j, self.k, self.text = [], [], [], [], [], [], []
-    self.contador = 0
-  def agregar_cubo(self, x0, y0, z0, dx, dy, dz, hover_txt=None):
-    off = len(self.x)
-    self.x.extend([x0, x0 + dx, x0 + dx, x0, x0, x0 + dx, x0 + dx, x0])
-    self.y.extend([y0, y0, y0 + dy, y0 + dy, y0, y0, y0 + dy, y0 + dy])
-    self.z.extend([z0, z0, z0, z0, z0 + dz, z0 + dz, z0 + dz, z0 + dz])
-    self.i.extend([idx + off for idx in [7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2]])
-    self.j.extend([idx + off for idx in [3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3]])
-    self.k.extend([idx + off for idx in [0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6]])
-    if hover_txt: self.text.extend([hover_txt] * 8)
-    self.contador += 1
-  def agregar_cilindro(self, xc, yc, zb, r, h, hover_txt=None):
-    l = 8; off = len(self.x)
-    for i in range(l):
-      ang = 2 * math.pi * i / l
-      self.x.extend([xc + r * math.cos(ang)] * 2); self.y.extend([yc + r * math.sin(ang)] * 2); self.z.extend([zb, zb + h])
-      if hover_txt: self.text.extend([hover_txt] * 2)
-    self.x.extend([xc] * 2); self.y.extend([yc] * 2); self.z.extend([zb, zb + h])
-    if hover_txt: self.text.extend([hover_txt] * 2)
-    cb, ct = off + l * 2, off + l * 2 + 1
-    for i in range(l):
-      nxt = (i + 1) % l
-      b1, t1, b2, t2 = off + i * 2, off + i * 2 + 1, off + nxt * 2, off + nxt * 2 + 1
-      self.i.extend([b1, t1, cb, ct]); self.j.extend([b2, b2, b2, t1]); self.k.extend([t1, t2, b1, t2])
-    self.contador += 1
-  def obtener_trazo(self):
-    if not self.x: return None
-    return go.Mesh3d(x=self.x, y=self.y, z=self.z, i=self.i, j=self.j, k=self.k, color=self.color, opacity=self.opacidad, name=self.nombre, text=self.text if self.text else None, hoverinfo="text" if self.text else "name", showscale=False, flatshading=True)
-
-def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
-  lp, ap, hp = a_float(valor_col(fila, "largo_pallet", mapa), 120), a_float(valor_col(fila, "ancho_pallet", mapa), 120), a_float(valor_col(fila, "altura_pallet", mapa), 15)
-  largo, ancho, alto = a_float(valor_col(fila, "largo", mapa)), a_float(valor_col(fila, "ancho", mapa)), a_float(valor_col(fila, "alto", mapa))
-  target = int(cap_usada) if total_unidades is None else int(total_unidades)
-  lay = mejor_distribucion_filas(largo, ancho, lp, ap)
-  if lay["cantidad"] <= 0 or target <= 0: return go.Figure()
-  m_base = MallaAgrupada("#c18c5d", "Madera")
-  m_base.agregar_cubo(0, 0, hp * 0.8, lp, ap, hp * 0.2)
-  m_base.agregar_cubo(0, 0, 0, lp * 0.1, ap, hp * 0.8); m_base.agregar_cubo((lp - lp * 0.1) / 2, 0, 0, lp * 0.1, ap, hp * 0.8); m_base.agregar_cubo(lp - lp * 0.1, 0, 0, lp * 0.1, ap, hp * 0.8)
-  m_carga = MallaAgrupada("#2563eb" if es_formato_circular(valor_col(fila, "formato", mapa)) else "#d4a373", "Carga")
-  u_p, niv = 0, 0
-  while u_p < target:
-    for c in lay["cajas"]:
-      if u_p >= target: break
-      if es_formato_circular(valor_col(fila, "formato", mapa)): m_carga.agregar_cilindro(c["x"] + c["largo"] / 2, c["y"] + c["ancho"] / 2, hp + niv * alto, min(c["largo"], c["ancho"]) / 2 - 0.2, alto - 0.5)
-      else: m_carga.agregar_cubo(c["x"] + 0.25, c["y"] + 0.25, hp + niv * alto, c["largo"] - 0.5, c["ancho"] - 0.5, alto - 0.25)
-      u_p += 1
-    niv += 1
-  fig = go.Figure(data=[m_base.obtener_trazo(), m_carga.obtener_trazo()])
-  sku_name = valor_col(fila, "sku", mapa)
-  _ = fig.update_layout(title=dict(text=f"<b>📦 Pallet Unitario ({sku_name})</b>", x=0.5, font=dict(size=11, color="#475569")), scene=dict(xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False), aspectmode="data"), margin=dict(r=0, l=0, b=0, t=25), height=300)
-  return fig
-
 # ============================================================
 # 4. MOTOR DE CÁLCULO LAYOUT 3D
 # ============================================================
@@ -519,68 +460,7 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     r_ub.append({"Ubicadas": u})
   return {"modulos": m_v, "niveles": niv, "capacidad": len(alm), "demanda": int(df_activa["Cantidad_Pallets"].sum()), "diferencia": len(alm) - int(df_activa["Cantidad_Pallets"].sum()), "staging": sz, "oficinas": conf.get("oficinas", []), "modulos_list": m_l, "almacen": alm, "pilares_reales": pil_r, "pallets_ubicados_totales": sum(r["Ubicadas"] for r in r_ub), "alt_nivel_viga": a_n_v, "l_modulo": l_mod, "t_marco": t_m, "pp_d": pp_d, "ap_w": ap_w, "viga_h": 0.12, "is_vertical": is_vertical}
 
-def add_cube_rotated(capa, x0, y0, z0, dx, dy, dz, is_vertical, hover_txt=None):
-  if is_vertical: capa.agregar_cubo(y0, x0, z0, dy, dx, dz, hover_txt)
-  else: capa.agregar_cubo(x0, y0, z0, dx, dy, dz, hover_txt)
-
-# --- OPCIÓN 1: MOTOR 3D PLOTLY (ORIGINAL) ---
-def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas, modo_vista):
-  d_abc = {"A": "#e74c3c", "B": "#f39c12", "C": "#3498db"}
-  d_xyz = {"AX": "#900C3F", "AY": "#C70039", "AZ": "#FF5733", "BX": "#E67E22", "BY": "#F39C12", "BZ": "#F1C40F", "CX": "#2E86C1", "CY": "#3498DB", "CZ": "#85C1E9"}
-  if skus_buscados and "TODOS" in skus_buscados: skus_buscados = set()
-  c_pil = MallaAgrupada("#e74c3c", "Pilares CD"); c_ofi = MallaAgrupada("#bdc3c7", "Oficinas", 0.9); c_sz = MallaAgrupada("#f39c12", "Staging", 0.4)
-  c_m = MallaAgrupada("#2c3e50", "Rack", 0.1 if skus_buscados else 1.0); c_mb = MallaAgrupada("#7f8c8d", "Rack Inactivo", 0.4)
-  c_v = MallaAgrupada("#e67e22", "Vigas", 0.1 if skus_buscados else 1.0); c_mad = MallaAgrupada("#d35400", "Pallet Base", 1.0); c_mada = MallaAgrupada("#bdc3c7", "Pallet Oculto", 0.1)
-  c_f, c_s = {"Destacado": MallaAgrupada("#2ecc71", "SKU Buscado", 1.0), "Apagado": MallaAgrupada("#ecf0f1", "Oculto", 0.1)}, {"Destacado": MallaAgrupada("#27ae60", "Saldo Buscado", 1.0), "Apagado": MallaAgrupada("#ecf0f1", "Oculto", 0.1)}
-  for k, color in d_xyz.items() if "9 Zonas" in modo_vista else d_abc.items(): c_f[k], c_s[k] = MallaAgrupada(color, f"Clase {k}"), MallaAgrupada(color, f"Saldo {k}")
-  for px, py in res["pilares_reales"]:
-    if px < l_m and py < a_m: c_pil.agregar_cubo(px - 0.25, py - 0.25, 0, 0.5, 0.5, alt_m)
-  for ofi in res["oficinas"]: c_ofi.agregar_cubo(ofi["x"], ofi["y"], 0, ofi["w"], ofi["d"], ofi.get("h", 3.5))
-  for st_z in res["staging"]: c_sz.agregar_cubo(st_z["x1"], st_z["y1"], 0.01, st_z["x2"] - st_z["x1"], st_z["y2"] - st_z["y1"], 0.02)
-  t, hr = res["t_marco"], max(res["niveles"] * res["alt_nivel_viga"], res["alt_nivel_viga"])
-  for mod in res["modulos_list"]:
-    xp, yr = mod["x"], mod["y"]
-    ca = c_mb if mod["bloqueado"] else c_m
-    add_cube_rotated(ca, xp, yr, 0, t, res["pp_d"], t, is_vertical); add_cube_rotated(ca, xp, yr, 0, t, t, hr, is_vertical)
-    add_cube_rotated(ca, xp, yr + res["pp_d"] - t, 0, t, t, hr, is_vertical); add_cube_rotated(ca, xp + res["l_modulo"] - t, yr, 0, t, t, hr, is_vertical)
-    add_cube_rotated(ca, xp + res["l_modulo"] - t, yr + res["pp_d"] - t, 0, t, t, hr, is_vertical); add_cube_rotated(ca, xp, yr, hr, res["l_modulo"], res["pp_d"], 0.05, is_vertical)
-    cv = c_mb if mod["bloqueado"] else c_v
-    for n_v in range(1, res["niveles"]):
-      zv = n_v * res["alt_nivel_viga"] - res["viga_h"]
-      add_cube_rotated(cv, xp + t, yr, zv, res["l_modulo"] - 2 * t, t / 2, res["viga_h"], is_vertical)
-      add_cube_rotated(cv, xp + t, yr + res["pp_d"] - t / 2, zv, res["l_modulo"] - 2 * t, t / 2, res["viga_h"], is_vertical)
-  for slot in res["almacen"]:
-    if slot["ocupado"]:
-      ac, es, ec = max(0.1, slot["alt_p"] - 0.12), slot.get("es_saldo", False), slot.get("es_cilindro", False)
-      th = f"<b>📍 Pos: [{slot['id_posicion']}]</b><br>📦 SKU: {slot['sku']}<br>🏷️ Pasillo: {slot['letra_pasillo']} | Módulo: {slot['modulo']} | Nivel: {slot['nivel']}<br>📏 Alto Carga: {ac:.2f}m" + (" <b style='color:#e74c3c;'>(SALDO)</b>" if es else "")
-      if skus_buscados: cc, cm = ((c_s["Destacado"] if es else c_f["Destacado"], c_mad) if slot["sku"] in skus_buscados else (c_s["Apagado"] if es else c_f["Apagado"], c_mada))
-      else: cm, cc = c_mad, (c_s if es else c_f).get(slot["abc_xyz"] if "9 Zonas" in modo_vista else slot["abc"], (c_s if es else c_f).get("C" if "3 Zonas" in modo_vista else "CZ"))
-      add_cube_rotated(cm, slot["x_pal"], slot["y"] + 0.05, slot["z"] + 0.02, res["ap_w"], res["pp_d"] - 0.1, 0.12, is_vertical)
-      rx, ry = ((slot["y"] + 0.05, slot["x_pal"] + 0.05) if is_vertical else (slot["x_pal"] + 0.05, slot["y"] + 0.05))
-      wc, dc = ((res["pp_d"] - 0.1, res["ap_w"] - 0.1) if is_vertical else (res["ap_w"] - 0.1, res["pp_d"] - 0.2))
-      if ec: cc.agregar_cilindro(rx + wc / 2, ry + dc / 2, slot["z"] + 0.14, min(wc, dc) / 2, ac, th)
-      else: cc.agregar_cubo(rx, ry, slot["z"] + 0.14, wc, dc, ac, th)
-  c_puertas_cortina = MallaAgrupada("#f1c40f", "Cortina", 0.4); c_puertas_marcos = MallaAgrupada("#f39c12", "Marco", 1.0); alt_puerta = 4.5
-  for p in puertas:
-    pared, pos, w = p["pared"], p["pos"], p["w"]
-    if pared == "S":
-      c_puertas_cortina.agregar_cubo(pos, 0.1, 0, w, 0.1, alt_puerta); c_puertas_marcos.agregar_cubo(pos, 0, 0, 0.2, 0.3, alt_puerta); c_puertas_marcos.agregar_cubo(pos + w - 0.2, 0, 0, 0.2, 0.3, alt_puerta); c_puertas_marcos.agregar_cubo(pos, 0, alt_puerta, w, 0.3, 0.4)
-    elif pared == "N":
-      c_puertas_cortina.agregar_cubo(pos, a_m - 0.2, 0, w, 0.1, alt_puerta); c_puertas_marcos.agregar_cubo(pos, a_m - 0.3, 0, 0.2, 0.3, alt_puerta); c_puertas_marcos.agregar_cubo(pos + w - 0.2, a_m - 0.3, 0, 0.2, 0.3, alt_puerta); c_puertas_marcos.agregar_cubo(pos, a_m - 0.3, alt_puerta, w, 0.3, 0.4)
-    elif pared == "E":
-      c_puertas_cortina.agregar_cubo(l_m - 0.2, pos, 0, 0.1, w, alt_puerta); c_puertas_marcos.agregar_cubo(l_m - 0.3, pos, 0, 0.3, 0.2, alt_puerta); c_puertas_marcos.agregar_cubo(l_m - 0.3, pos + w - 0.2, 0, 0.3, 0.2, alt_puerta); c_puertas_marcos.agregar_cubo(l_m - 0.3, pos, alt_puerta, 0.3, w, 0.4)
-    elif pared == "O":
-      c_puertas_cortina.agregar_cubo(0.1, pos, 0, 0.1, w, alt_puerta); c_puertas_marcos.agregar_cubo(0, pos, 0, 0.3, 0.2, alt_puerta); c_puertas_marcos.agregar_cubo(0, pos + w - 0.2, 0, 0.3, 0.2, alt_puerta); c_puertas_marcos.agregar_cubo(0, pos, alt_puerta, 0.3, w, 0.4)
-  fig_3d = go.Figure()
-  _ = fig_3d.add_trace(go.Mesh3d(x=[0, l_m, l_m, 0, 0, l_m, l_m, 0], y=[0, 0, a_m, a_m, 0, 0, a_m, a_m], z=[-0.1, -0.1, -0.1, -0.1, 0, 0, 0, 0], i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2], j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3], k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6], color="#ecf0f1", showscale=False, name="Suelo"))
-  for c in ([c_pil, c_ofi, c_sz, c_m, c_mb, c_v, c_mad, c_mada] + list(c_f.values()) + list(c_s.values()) + [c_puertas_cortina, c_puertas_marcos]):
-    tr = c.obtener_trazo()
-    if tr: _ = fig_3d.add_trace(tr)
-  ef = ("<b style='color:#e67e22;'>[FOCO ACTIVO]</b><br>" if skus_buscados else "")
-  _ = fig_3d.update_layout(title=dict(text=(f"{ef}<b>Gemelo Digital 3D | Formatos Reales</b><br><sup>Ubicados: {res['pallets_ubicados_totales']} pallets</sup>"), x=0.5, font=dict(size=16)), scene=dict(xaxis=dict(title="Largo X (m)", range=[-5, l_m + 5], backgroundcolor="white"), yaxis=dict(title="Ancho Y (m)", range=[-5, a_m + 5], backgroundcolor="white"), zaxis=dict(title="Alto Z (m)", range=[0, max(10, alt_m + 1)], backgroundcolor="white"), aspectmode="data", camera=dict(eye=dict(x=1.5, y=1.5, z=1.2))), margin=dict(r=0, l=0, b=0, t=80), height=800, paper_bgcolor="white", showlegend=False)
-  return fig_3d
-
-# --- OPCIÓN 2: NUEVO MOTOR 3D THREE.JS / WEBGL COMPLETO (HOVER / FIX ASPECT RATIO) ---
+# --- NUEVO MOTOR 3D THREE.JS / WEBGL COMPLETO (HOVER / FIX ASPECT RATIO / SIN CARTELES) ---
 def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas, modo_vista):
   datos_bodega = {
       "largo": l_m, "ancho": a_m, "alto": alt_m, "is_vertical": is_vertical,
@@ -638,22 +518,21 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
             scene.background = new THREE.Color(0x0f172a);
             scene.fog = new THREE.FogExp2(0x0f172a, 0.008);
 
-            // Ajuste dinámico de cámara para evitar visión distorsionada/apretada
-            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.5, 1000);
+            // Aspect Ratio Dinámico para evitar distorsión visual
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / 850, 0.5, 1000);
             const maxDim = Math.max(data.largo, data.ancho);
-            camera.position.set(data.largo * 1.2, maxDim * 0.8, data.ancho * 1.5);
+            camera.position.set(data.largo / 2, maxDim * 0.9, data.ancho * 0.8);
 
             const renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setSize(window.innerWidth, 850);
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
             container.appendChild(renderer.domElement);
 
             const controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.target.set(data.largo / 2, 0, data.ancho / 2);
+            controls.target.set(data.largo / 2, 0, -data.ancho / 2);
             controls.update();
 
-            // Mantiene las proporciones reales cuando cambia el tamaño de la ventana
             window.addEventListener('resize', () => {
                 camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
@@ -664,25 +543,26 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
             scene.add(ambientLight);
 
             const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
-            dirLight.position.set(data.largo / 2, 40, data.ancho / 2);
+            dirLight.position.set(data.largo / 2, 40, -data.ancho / 2);
             dirLight.castShadow = true;
             dirLight.shadow.mapSize.width = 2048;
             dirLight.shadow.mapSize.height = 2048;
             scene.add(dirLight);
 
+            // El mapeo "-Y" asegura que el origen (0,0) esté exactamente en la esquina inferior izquierda.
             const floorGeo = new THREE.PlaneGeometry(data.largo + 20, data.ancho + 20);
             const floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.2 });
             const floor = new THREE.Mesh(floorGeo, floorMat);
             floor.rotation.x = -Math.PI / 2;
-            floor.position.set(data.largo / 2, -0.02, data.ancho / 2);
+            floor.position.set(data.largo / 2, -0.02, -data.ancho / 2);
             floor.receiveShadow = true;
             scene.add(floor);
 
             const grid = new THREE.GridHelper(Math.max(data.largo, data.ancho) + 20, 50, 0x38bdf8, 0x334155);
-            grid.position.set(data.largo / 2, 0, data.ancho / 2);
+            grid.position.set(data.largo / 2, 0, -data.ancho / 2);
             scene.add(grid);
 
-            const linePoints = [new THREE.Vector3(0, 0.05, 0), new THREE.Vector3(data.largo, 0.05, 0), new THREE.Vector3(data.largo, 0.05, data.ancho), new THREE.Vector3(0, 0.05, data.ancho), new THREE.Vector3(0, 0.05, 0)];
+            const linePoints = [new THREE.Vector3(0, 0.05, 0), new THREE.Vector3(data.largo, 0.05, 0), new THREE.Vector3(data.largo, 0.05, -data.ancho), new THREE.Vector3(0, 0.05, -data.ancho), new THREE.Vector3(0, 0.05, 0)];
             const lineGeo = new THREE.BufferGeometry().setFromPoints(linePoints);
             const lineMat = new THREE.LineBasicMaterial({ color: 0xeab308, linewidth: 3 });
             scene.add(new THREE.Line(lineGeo, lineMat));
@@ -691,7 +571,7 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
             data.pilares.forEach(p => {
                 if (p[0] <= data.largo && p[1] <= data.ancho) {
                     const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, data.alto, 0.5), pilMat);
-                    mesh.position.set(p[0], data.alto/2, p[1]);
+                    mesh.position.set(p[0], data.alto/2, -p[1]);
                     mesh.castShadow = true;
                     scene.add(mesh);
                 }
@@ -701,7 +581,7 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
             data.oficinas.forEach(o => {
                 const h = o.h || 3.5;
                 const mesh = new THREE.Mesh(new THREE.BoxGeometry(o.w, h, o.d), offMat);
-                mesh.position.set(o.x + o.w/2, h/2, o.y + o.d/2);
+                mesh.position.set(o.x + o.w/2, h/2, -(o.y + o.d/2));
                 mesh.castShadow = true;
                 scene.add(mesh);
             });
@@ -711,7 +591,7 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
                 const w = s.x2 - s.x1; const d = s.y2 - s.y1;
                 const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, d), stMat);
                 mesh.rotation.x = -Math.PI / 2;
-                mesh.position.set(s.x1 + w/2, 0.03, s.y1 + d/2);
+                mesh.position.set(s.x1 + w/2, 0.03, -(s.y1 + d/2));
                 scene.add(mesh);
             });
 
@@ -723,7 +603,7 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
                 else if (p.pared === 'E') { x0 = data.largo - 0.15; y0 = p.pos + w/2; dx = 0.3; dy = w; }
                 else if (p.pared === 'O') { x0 = 0.15; y0 = p.pos + w/2; dx = 0.3; dy = w; }
                 const frameMesh = new THREE.Mesh(new THREE.BoxGeometry(dx, h, dy), doorMat);
-                frameMesh.position.set(x0, h/2, y0);
+                frameMesh.position.set(x0, h/2, -y0);
                 scene.add(frameMesh);
             });
 
@@ -737,18 +617,18 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
                 const coords = isV ? [[ry, rx], [ry + pd - 0.08, rx], [ry, rx + lm - 0.08], [ry + pd - 0.08, rx + lm - 0.08]] : [[rx, ry], [rx + lm - 0.08, ry], [rx, ry + pd - 0.08], [rx + lm - 0.08, ry + pd - 0.08]];
                 coords.forEach(pt => {
                     const post = new THREE.Mesh(postGeo, rackPostMat);
-                    post.position.set(pt[0] + 0.04, hr / 2, pt[1] + 0.04);
+                    post.position.set(pt[0] + 0.04, hr / 2, -(pt[1] + 0.04));
                     post.castShadow = true;
                     scene.add(post);
                 });
                 for (let n = 1; n <= data.niveles; n++) {
                     const zv = n * data.alt_nivel_viga - data.viga_h;
                     if (!isV) {
-                        const b1 = new THREE.Mesh(new THREE.BoxGeometry(lm - 0.16, data.viga_h, 0.05), beamMat); b1.position.set(rx + lm / 2, zv, ry + 0.025); scene.add(b1);
-                        const b2 = new THREE.Mesh(new THREE.BoxGeometry(lm - 0.16, data.viga_h, 0.05), beamMat); b2.position.set(rx + lm / 2, zv, ry + pd - 0.025); scene.add(b2);
+                        const b1 = new THREE.Mesh(new THREE.BoxGeometry(lm - 0.16, data.viga_h, 0.05), beamMat); b1.position.set(rx + lm / 2, zv, -(ry + 0.025)); scene.add(b1);
+                        const b2 = new THREE.Mesh(new THREE.BoxGeometry(lm - 0.16, data.viga_h, 0.05), beamMat); b2.position.set(rx + lm / 2, zv, -(ry + pd - 0.025)); scene.add(b2);
                     } else {
-                        const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, data.viga_h, lm - 0.16), beamMat); b1.position.set(ry + 0.025, zv, rx + lm / 2); scene.add(b1);
-                        const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, data.viga_h, lm - 0.16), beamMat); b2.position.set(ry + pd - 0.025, zv, rx + lm / 2); scene.add(b2);
+                        const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, data.viga_h, lm - 0.16), beamMat); b1.position.set(ry + 0.025, zv, -(rx + lm / 2)); scene.add(b1);
+                        const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, data.viga_h, lm - 0.16), beamMat); b2.position.set(ry + pd - 0.025, zv, -(rx + lm / 2)); scene.add(b2);
                     }
                 }
             });
@@ -772,7 +652,7 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
                     const pW = isV ? data.pp_d - 0.1 : data.ap_w; const pD = isV ? data.ap_w : data.pp_d - 0.1;
 
                     const pBaseMesh = new THREE.Mesh(new THREE.BoxGeometry(pW, 0.12, pD), new THREE.MeshStandardMaterial({ color: 0xb88252, roughness: 0.8, transparent: opacidad < 1, opacity: opacidad }));
-                    pBaseMesh.position.set(px + pW/2, s.z + 0.06, py + pD/2);
+                    pBaseMesh.position.set(px + pW/2, s.z + 0.06, -(py + pD/2));
                     if (opacidad === 1) { pBaseMesh.castShadow = true; pBaseMesh.receiveShadow = true; }
                     scene.add(pBaseMesh);
 
@@ -782,10 +662,10 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
                     if (s.es_cilindro) {
                         const radius = Math.min(pW, pD) / 2.2;
                         cargoMesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, h, 16), cargoMat);
-                        cargoMesh.position.set(px + pW/2, s.z + 0.12 + h/2, py + pD/2);
+                        cargoMesh.position.set(px + pW/2, s.z + 0.12 + h/2, -(py + pD/2));
                     } else {
                         cargoMesh = new THREE.Mesh(new THREE.BoxGeometry(pW - 0.05, h, pD - 0.05), cargoMat);
-                        cargoMesh.position.set(px + pW/2, s.z + 0.12 + h/2, py + pD/2);
+                        cargoMesh.position.set(px + pW/2, s.z + 0.12 + h/2, -(py + pD/2));
                     }
                     if (opacidad === 1) { cargoMesh.castShadow = true; cargoMesh.receiveShadow = true; }
                     
@@ -826,7 +706,7 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
     </html>
     """
   html_final = html_template.replace("__DATOS_JSON__", json_data).replace("__MODO_VISTA__", modo_vista)
-  components.html(html_final, height=800)
+  components.html(html_final, height=850)
 
 
 # ============================================================
@@ -866,7 +746,7 @@ def mostrar_portada():
         unsafe_allow_html=True,
     )
     st.button(
-        "⚙️️ Abrir Diseñador Layout",
+        "⚙️ Abrir Diseñador Layout",
         key="btn_lay",
         type="primary",
         use_container_width=True,
@@ -1915,7 +1795,7 @@ def mostrar_layout():
         ("#ecfdf5", "#065f46") if dif >= 0 else ("#fef2f2", "#991b1b")
     )
     msg_txt = (
-        f"✔️ ¡ÉXITO! Caben todos y sobran {dif:,}."
+        f"✔️️ ¡ÉXITO! Caben todos y sobran {dif:,}."
         if dif >= 0
         else f"⚠️ ¡ALERTA! Te faltan {abs(dif):,} posiciones."
     )
@@ -1949,7 +1829,7 @@ def mostrar_layout():
     st.markdown("---")
     res = st.session_state.res_layout_actual
 
-    col_exp1, col_exp2, col_exp3 = st.columns([1, 1, 1])
+    col_exp1, col_exp2 = st.columns([1, 1])
     with col_exp1:
       st.session_state.modo_vista_color = st.selectbox(
           "🎨 Zonificación de Colores Racks:",
@@ -1959,16 +1839,6 @@ def mostrar_layout():
           ),
       )
     with col_exp2:
-      st.session_state.motor_3d_layout = st.selectbox(
-          "🎮 Motor Gráfico 3D:",
-          ["Three.js WebGL (HD Completo)", "Plotly 3D (Original)"],
-          index=["Three.js WebGL (HD Completo)", "Plotly 3D (Original)"].index(
-              st.session_state.get(
-                  "motor_3d_layout", "Three.js WebGL (HD Completo)"
-              )
-          ),
-      )
-    with col_exp3:
       st.markdown(
           "<div style='height:28px;'></div>", unsafe_allow_html=True
       )
@@ -2271,39 +2141,328 @@ def mostrar_layout():
 
     st.markdown("<hr>", unsafe_allow_html=True)
     mostrar_3d_layout = st.toggle(
-        "🧊 Cargar Gemelo Digital 3D (Puede tardar unos segundos)"
+        "🧊 Cargar Gemelo Digital 3D HD (Three.js WebGL)"
     )
 
     if mostrar_3d_layout:
       with st.spinner("Construyendo Mallas 3D de la Bodega..."):
-        if (
-            st.session_state.get("motor_3d_layout")
-            == "Three.js WebGL (HD Completo)"
-        ):
-          generar_layout_3d_threejs(
-              res,
-              l_m,
-              a_m,
-              st.session_state.alt_bod,
-              res["is_vertical"],
-              skus_b,
-              puertas,
-              st.session_state.modo_vista_color,
-          )
-        else:
-          st.plotly_chart(
-              generar_layout_3d(
-                  res,
-                  l_m,
-                  a_m,
-                  st.session_state.alt_bod,
-                  res["is_vertical"],
-                  skus_b,
-                  puertas,
-                  st.session_state.modo_vista_color,
-              ),
-              use_container_width=True,
-          )
+        # Preparación de datos JSON para WebGL
+        datos_bodega = {
+            "largo": l_m,
+            "ancho": a_m,
+            "alto": st.session_state.alt_bod,
+            "is_vertical": res["is_vertical"],
+            "l_modulo": res["l_modulo"],
+            "pp_d": res["pp_d"],
+            "t_marco": res["t_marco"],
+            "niveles": res["niveles"],
+            "alt_nivel_viga": res["alt_nivel_viga"],
+            "viga_h": res["viga_h"],
+            "ap_w": res["ap_w"],
+            "slots": [
+                {
+                    "id": s["id_posicion"],
+                    "x": s["x_pal"],
+                    "y": s["y"],
+                    "z": s["z"],
+                    "sku": s.get("sku", ""),
+                    "abc": s.get("abc", "C"),
+                    "abc_xyz": s.get("abc_xyz", "CZ"),
+                    "ocupado": s["ocupado"],
+                    "es_cilindro": s.get("es_cilindro", False),
+                    "es_saldo": s.get("es_saldo", False),
+                    "alt_p": s.get("alt_p", 1.2),
+                    "destacado": True if not skus_b else (s.get("sku", "").upper() in skus_b),
+                    "letra": s["letra_pasillo"],
+                    "modulo": s["modulo"],
+                    "nivel": s["nivel"]
+                }
+                for s in res["almacen"]
+            ],
+            "racks": [
+                {"x": m["x"], "y": m["y"], "bloqueado": m["bloqueado"]}
+                for m in res["modulos_list"]
+            ],
+            "pilares": res["pilares_reales"],
+            "oficinas": res["oficinas"],
+            "staging": res["staging"],
+            "puertas": puertas,
+            "hay_filtro": len(skus_b) > 0 if skus_b else False
+        }
+
+        json_data = json.dumps(datos_bodega)
+
+        # Inyección de motor 3D
+        html_template = """
+          <!DOCTYPE html>
+          <html>
+          <head>
+              <style>
+                  body { margin: 0; overflow: hidden; background-color: #0f172a; font-family: system-ui, -apple-system, sans-serif; }
+                  #canvas-container { width: 100vw; height: 850px; position: relative; }
+                  #info-overlay { position: absolute; top: 15px; left: 15px; color: white; background: rgba(15, 23, 42, 0.88); padding: 12px 18px; border-radius: 8px; border: 1px solid #334155; font-size: 13px; pointer-events: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+                  #tooltip { position: absolute; background: rgba(15, 23, 42, 0.95); color: #fff; padding: 12px; border-radius: 6px; pointer-events: none; display: none; z-index: 1000; font-size: 13px; border: 1px solid #38bdf8; box-shadow: 0 6px 12px rgba(0,0,0,0.4); line-height: 1.5; min-width: 180px; }
+              </style>
+              <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+              <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+          </head>
+          <body>
+              <div id="info-overlay">
+                  ✨ <b>Gemelo Digital HD Completo (WebGL)</b><br>
+                  🏢 <i>Mueve el ratón sobre un pallet para ver sus datos.</i><br>
+                  🎮 <i>Clic Izq: Rotar 360° | Clic Der: Desplazar | Rueda: Zoom</i>
+              </div>
+              <div id="canvas-container">
+                  <div id="tooltip"></div>
+              </div>
+
+              <script>
+                  const data = __DATOS_JSON__;
+                  const modoVista = "__MODO_VISTA__";
+                  
+                  const container = document.getElementById('canvas-container');
+                  const tooltip = document.getElementById('tooltip');
+                  const scene = new THREE.Scene();
+                  scene.background = new THREE.Color(0x0f172a);
+                  scene.fog = new THREE.FogExp2(0x0f172a, 0.008);
+
+                  // Fix Aspect Ratio Dinámico para no ver aplastada la bodega
+                  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / 850, 0.5, 1000);
+                  const maxDim = Math.max(data.largo, data.ancho);
+                  camera.position.set(data.largo / 2, maxDim * 0.9, data.ancho * 0.8);
+
+                  const renderer = new THREE.WebGLRenderer({ antialias: true });
+                  renderer.setSize(window.innerWidth, 850);
+                  renderer.shadowMap.enabled = true;
+                  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                  container.appendChild(renderer.domElement);
+
+                  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+                  controls.target.set(data.largo / 2, 0, -data.ancho / 2);
+                  controls.update();
+
+                  window.addEventListener('resize', () => {
+                      camera.aspect = window.innerWidth / window.innerHeight;
+                      camera.updateProjectionMatrix();
+                      renderer.setSize(window.innerWidth, window.innerHeight);
+                  });
+
+                  const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+                  scene.add(ambientLight);
+
+                  const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+                  dirLight.position.set(data.largo / 2, 40, -data.ancho / 2);
+                  dirLight.castShadow = true;
+                  dirLight.shadow.mapSize.width = 2048;
+                  dirLight.shadow.mapSize.height = 2048;
+                  scene.add(dirLight);
+
+                  // Ajuste de Coordenadas Invertidas (Z = -Y) para que coincida exactamente con Plotly 2D (0,0 Bottom Left)
+                  const floorGeo = new THREE.PlaneGeometry(data.largo + 20, data.ancho + 20);
+                  const floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.2 });
+                  const floor = new THREE.Mesh(floorGeo, floorMat);
+                  floor.rotation.x = -Math.PI / 2;
+                  floor.position.set(data.largo / 2, -0.02, -data.ancho / 2);
+                  floor.receiveShadow = true;
+                  scene.add(floor);
+
+                  const grid = new THREE.GridHelper(Math.max(data.largo, data.ancho) + 20, 50, 0x38bdf8, 0x334155);
+                  grid.position.set(data.largo / 2, 0, -data.ancho / 2);
+                  scene.add(grid);
+
+                  const linePoints = [
+                      new THREE.Vector3(0, 0.05, 0),
+                      new THREE.Vector3(data.largo, 0.05, 0),
+                      new THREE.Vector3(data.largo, 0.05, -data.ancho),
+                      new THREE.Vector3(0, 0.05, -data.ancho),
+                      new THREE.Vector3(0, 0.05, 0)
+                  ];
+                  const lineGeo = new THREE.BufferGeometry().setFromPoints(linePoints);
+                  const lineMat = new THREE.LineBasicMaterial({ color: 0xeab308, linewidth: 3 });
+                  scene.add(new THREE.Line(lineGeo, lineMat));
+
+                  const pilMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.3 });
+                  data.pilares.forEach(p => {
+                      if (p[0] <= data.largo && p[1] <= data.ancho) {
+                          const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, data.alto, 0.5), pilMat);
+                          mesh.position.set(p[0], data.alto/2, -p[1]);
+                          mesh.castShadow = true;
+                          scene.add(mesh);
+                      }
+                  });
+
+                  const offMat = new THREE.MeshStandardMaterial({ color: 0x64748b, transparent: true, opacity: 0.75, roughness: 0.1, metalness: 0.5 });
+                  data.oficinas.forEach(o => {
+                      const h = o.h || 3.5;
+                      const mesh = new THREE.Mesh(new THREE.BoxGeometry(o.w, h, o.d), offMat);
+                      mesh.position.set(o.x + o.w/2, h/2, -(o.y + o.d/2));
+                      mesh.castShadow = true;
+                      scene.add(mesh);
+                  });
+
+                  const stMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+                  data.staging.forEach(s => {
+                      const w = s.x2 - s.x1; const d = s.y2 - s.y1;
+                      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, d), stMat);
+                      mesh.rotation.x = -Math.PI / 2;
+                      mesh.position.set(s.x1 + w/2, 0.03, -(s.y1 + d/2));
+                      scene.add(mesh);
+                  });
+
+                  const doorMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.2 });
+                  data.puertas.forEach(p => {
+                      const w = p.w; const h = 4.5; let x0=0, y0=0, dx=0.3, dy=0.3;
+                      if (p.pared === 'S') { x0 = p.pos + w/2; y0 = 0.15; dx = w; dy = 0.3; }
+                      else if (p.pared === 'N') { x0 = p.pos + w/2; y0 = data.ancho - 0.15; dx = w; dy = 0.3; }
+                      else if (p.pared === 'E') { x0 = data.largo - 0.15; y0 = p.pos + w/2; dx = 0.3; dy = w; }
+                      else if (p.pared === 'O') { x0 = 0.15; y0 = p.pos + w/2; dx = 0.3; dy = w; }
+                      const frameMesh = new THREE.Mesh(new THREE.BoxGeometry(dx, h, dy), doorMat);
+                      frameMesh.position.set(x0, h/2, -y0);
+                      scene.add(frameMesh);
+                  });
+
+                  const rackPostMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.3, metalness: 0.8 });
+                  const beamMat = new THREE.MeshStandardMaterial({ color: 0xe67e22, roughness: 0.4, metalness: 0.6 });
+                  const lm = data.l_modulo; const pd = data.pp_d; const hr = Math.max(data.niveles * data.alt_nivel_viga, data.alt_nivel_viga);
+
+                  data.racks.forEach(r => {
+                      const rx = r.x; const ry = r.y; const isV = data.is_vertical;
+                      const postGeo = new THREE.BoxGeometry(0.08, hr, 0.08);
+                      const coords = isV ? [
+                          [ry, rx], [ry + pd - 0.08, rx],
+                          [ry, rx + lm - 0.08], [ry + pd - 0.08, rx + lm - 0.08]
+                      ] : [
+                          [rx, ry], [rx + lm - 0.08, ry],
+                          [rx, ry + pd - 0.08], [rx + lm - 0.08, ry + pd - 0.08]
+                      ];
+
+                      coords.forEach(pt => {
+                          const post = new THREE.Mesh(postGeo, rackPostMat);
+                          post.position.set(pt[0] + 0.04, hr / 2, -(pt[1] + 0.04));
+                          post.castShadow = true;
+                          scene.add(post);
+                      });
+
+                      for (let n = 1; n <= data.niveles; n++) {
+                          const zv = n * data.alt_nivel_viga - data.viga_h;
+                          if (!isV) {
+                              const b1 = new THREE.Mesh(new THREE.BoxGeometry(lm - 0.16, data.viga_h, 0.05), beamMat);
+                              b1.position.set(rx + lm / 2, zv, -(ry + 0.025));
+                              scene.add(b1);
+
+                              const b2 = new THREE.Mesh(new THREE.BoxGeometry(lm - 0.16, data.viga_h, 0.05), beamMat);
+                              b2.position.set(rx + lm / 2, zv, -(ry + pd - 0.025));
+                              scene.add(b2);
+                          } else {
+                              const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, data.viga_h, lm - 0.16), beamMat);
+                              b1.position.set(ry + 0.025, zv, -(rx + lm / 2));
+                              scene.add(b1);
+
+                              const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, data.viga_h, lm - 0.16), beamMat);
+                              b2.position.set(ry + pd - 0.025, zv, -(rx + lm / 2));
+                              scene.add(b2);
+                          }
+                      }
+                  });
+
+                  let meshesInteractivos = [];
+                  const colMapABC = { 'A': 0xef4444, 'B': 0xf59e0b, 'C': 0x3b82f6 };
+                  const colMapXYZ = {
+                      'AX': 0x900C3F, 'AY': 0xC70039, 'AZ': 0xFF5733,
+                      'BX': 0xE67E22, 'BY': 0xF39C12, 'BZ': 0xF1C40F,
+                      'CX': 0x2E86C1, 'CY': 0x3498DB, 'CZ': 0x85C1E9
+                  };
+
+                  data.slots.forEach(s => {
+                      if (s.ocupado) {
+                          let colHex = colMapABC[s.abc] || 0x3b82f6;
+                          if (modoVista === '9 Zonas (ABC-XYZ)') {
+                              colHex = colMapXYZ[s.abc_xyz] || colHex;
+                          }
+
+                          let opacidad = 1.0;
+                          let colorFinal = colHex;
+                          
+                          if (data.hay_filtro && !s.destacado) {
+                              opacidad = 0.10;
+                              colorFinal = 0x94a3b8;
+                          } else if (data.hay_filtro && s.destacado) {
+                              colHex = 0x22c55e;
+                              colorFinal = colHex;
+                          }
+
+                          const isV = data.is_vertical;
+                          const px = isV ? s.y + 0.05 : s.x;
+                          const py = isV ? s.x + 0.05 : s.y + 0.05;
+                          const pW = isV ? data.pp_d - 0.1 : data.ap_w;
+                          const pD = isV ? data.ap_w : data.pp_d - 0.1;
+
+                          const pbMat = new THREE.MeshStandardMaterial({ color: 0xb88252, roughness: 0.8, transparent: opacidad < 1, opacity: opacidad });
+                          const pBaseMesh = new THREE.Mesh(new THREE.BoxGeometry(pW, 0.12, pD), pbMat);
+                          pBaseMesh.position.set(px + pW/2, s.z + 0.06, -(py + pD/2));
+                          if (opacidad === 1) { pBaseMesh.castShadow = true; pBaseMesh.receiveShadow = true; }
+                          scene.add(pBaseMesh);
+
+                          const h = Math.max(0.3, s.alt_p - 0.12);
+                          const cargoMat = new THREE.MeshStandardMaterial({ color: colorFinal, roughness: 0.5, transparent: opacidad < 1, opacity: opacidad });
+                          let cargoMesh;
+
+                          if (s.es_cilindro) {
+                              const radius = Math.min(pW, pD) / 2.2;
+                              cargoMesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, h, 16), cargoMat);
+                              cargoMesh.position.set(px + pW/2, s.z + 0.12 + h/2, -(py + pD/2));
+                          } else {
+                              cargoMesh = new THREE.Mesh(new THREE.BoxGeometry(pW - 0.05, h, pD - 0.05), cargoMat);
+                              cargoMesh.position.set(px + pW/2, s.z + 0.12 + h/2, -(py + pD/2));
+                          }
+
+                          if (opacidad === 1) { cargoMesh.castShadow = true; cargoMesh.receiveShadow = true; }
+                          
+                          cargoMesh.userData = { id: s.id, sku: s.sku, letra: s.letra, modulo: s.modulo, nivel: s.nivel, zona: modoVista === '9 Zonas (ABC-XYZ)' ? s.abc_xyz : s.abc, alt: s.alt_p };
+                          meshesInteractivos.push(cargoMesh);
+                          scene.add(cargoMesh);
+                      }
+                  });
+
+                  const raycaster = new THREE.Raycaster();
+                  const mouse = new THREE.Vector2();
+
+                  container.addEventListener('mousemove', (event) => {
+                      const rect = container.getBoundingClientRect();
+                      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                      
+                      raycaster.setFromCamera(mouse, camera);
+                      const intersects = raycaster.intersectObjects(meshesInteractivos);
+                      
+                      if (intersects.length > 0) {
+                          const d = intersects[0].object.userData;
+                          tooltip.style.display = 'block';
+                          tooltip.style.left = (event.clientX + 15) + 'px';
+                          tooltip.style.top = (event.clientY + 15) + 'px';
+                          tooltip.innerHTML = `<span style="color:#38bdf8; font-weight:bold;">📍 POSICIÓN: ${d.id}</span><hr style="margin:5px 0; border-color:#334155;"><b style="color:#cbd5e1;">📦 SKU:</b> <span style="color:#fff">${d.sku}</span><br><b style="color:#cbd5e1;">🏷️ Pasillo:</b> ${d.letra} | <b style="color:#cbd5e1;">Módulo:</b> ${d.modulo} | <b style="color:#cbd5e1;">Nivel:</b> ${d.nivel}<br><b style="color:#cbd5e1;">🎨 Zona:</b> ${d.zona}<br><b style="color:#cbd5e1;">📏 Alto Carga:</b> ${d.alt.toFixed(2)} m`;
+                          document.body.style.cursor = 'pointer';
+                      } else {
+                          tooltip.style.display = 'none';
+                          document.body.style.cursor = 'default';
+                      }
+                  });
+
+                  function animate() {
+                      requestAnimationFrame(animate);
+                      controls.update();
+                      renderer.render(scene, camera);
+                  }
+                  animate();
+              </script>
+          </body>
+          </html>
+          """
+
+        html_final = html_template.replace("__DATOS_JSON__", json_data).replace(
+            "__MODO_VISTA__", st.session_state.modo_vista_color
+        )
+        components.html(html_final, height=860)
 
 
 def mostrar_analytics():
