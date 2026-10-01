@@ -16,6 +16,14 @@ st.set_page_config(page_title="WMS Analytics Hub", layout="wide", page_icon="�
 MAX_PESO_PALLET = 1200
 PESO_MADERA_PALLET = 25
 
+# Ejemplo de cómo actualizar la lista de tu menú:
+opciones_menu = [
+    "Portada Principal",
+    "Layout 2D",
+    "WMS Analytics",
+    "📦 Modelo 3D SketchUp",  # <--- Agrega esta opción
+]
+
 if "menu_seleccion" not in st.session_state: st.session_state.menu_seleccion = "🏠 Portada Principal"
 if "skus_activos" not in st.session_state: st.session_state.skus_activos = []
 if "skus_invalidos" not in st.session_state: st.session_state.skus_invalidos = []
@@ -1011,6 +1019,43 @@ menu_opciones = ["🏠 Portada Principal", "📦 Cubicadora WMS", "🏗️ Layou
 st.session_state.menu_seleccion = st.sidebar.radio("Navegación", menu_opciones, index=menu_opciones.index(st.session_state.menu_seleccion))
 st.sidebar.markdown("---")
 st.sidebar.caption("WMS Analytics Hub v8.9 • Final Production")
+
+# ============================================================
+# PESTAÑA / VISTA: MODELO 3D SKETCHUP
+# ============================================================
+import streamlit.components.v1 as components
+
+if st.session_state.get("menu_seleccion") == "📦 Modelo 3D SketchUp":
+
+  st.title("📦 Visor 3D Interactivo - Modelo SketchUp")
+  st.markdown(
+      "Explora el diseño tridimensional del pallet/rack subido desde"
+      " SketchUp."
+  )
+
+  # Enlace RAW de tu archivo GLB subido a la rama desarrollo
+  URL_MODELO_3D = "https://raw.githubusercontent.com/oldgamerpablo-prog/gestor-pallets/desarrollo/Alexander%20-%201.glb"
+
+  html_visor_3d = f"""
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+
+    <div style="text-align: center; font-family: system-ui, -apple-system, sans-serif; margin-top: 15px;">
+        <model-viewer 
+            src="{URL_MODELO_3D}" 
+            alt="Modelo 3D de SketchUp" 
+            auto-rotate 
+            camera-controls 
+            shadow-intensity="1"
+            style="width: 100%; height: 550px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+        </model-viewer>
+        <p style="color: #64748b; font-size: 13px; margin-top: 10px;">
+            💡 <b>Instrucciones:</b> Arrastra con el clic izquierdo para rotar en 360°, usa el clic derecho para desplazar y la rueda del mouse para Zoom.
+        </p>
+    </div>
+    """
+
+  # Renderizar el visor en la pantalla
+  components.html(html_visor_3d, height=620)
 
 if st.session_state.menu_seleccion == "🏠 Portada Principal": mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS": mostrar_cubicadora()
