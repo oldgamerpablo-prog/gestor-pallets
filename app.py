@@ -97,6 +97,7 @@ if "kpi_layout_ubicados" not in st.session_state:
 css_styles = "<style>.box-3d{transition:all 0.25s cubic-bezier(0.25,0.8,0.25,1);cursor:crosshair;}.box-3d:hover{transform:scale(1.08) translateY(-3px);box-shadow:0 10px 20px rgba(0,0,0,0.4)!important;z-index:100!important;filter:brightness(1.1);}.cota-linea,.cota-linea-v{position:absolute;display:flex;align-items:center;justify-content:center;font-size:10px;color:#475569;font-weight:bold;background-repeat:no-repeat;}.cota-linea{border-left:1px solid #64748b;border-right:1px solid #64748b;background-image:linear-gradient(#64748b,#64748b);background-size:100% 1px;background-position:center;}.cota-linea-v{border-top:1px solid #64748b;border-bottom:1px solid #64748b;background-image:linear-gradient(#64748b,#64748b);background-size:1px 100%;background-position:center;flex-direction:column;}.cota-texto{background:white;padding:2px 4px;border-radius:3px;z-index:2;}.kpi-box{background:#ffffff;border:1px solid #e2e8f0;padding:15px;border-radius:8px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.1);}.kpi-title{font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;}.kpi-value{font-size:24px;font-weight:700;color:#0f172a;}.kpi-box-danger{background:#fef2f2!important;border:1px solid #fecaca!important;}.kpi-value-danger{color:#dc2626!important;}</style>"
 color_styles = "<style>.hero-container-color{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0369a1 100%);border-radius:16px;padding:50px 30px;text-align:center;box-shadow:0 12px 30px rgba(15,23,42,0.25);margin-bottom:35px;}.hero-title-color{font-size:3.6rem;font-weight:900;color:#ffffff;letter-spacing:-1px;margin-bottom:14px;text-align:center;}.hero-subtitle-color{color:#e2e8f0;font-size:1.25rem;font-weight:400;max-width:850px;margin:0 auto;line-height:1.6;text-align:center;}.color-card{background:#ffffff;border-radius:14px;padding:25px;height:230px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 6px 18px rgba(0,0,0,0.05);transition:all 0.3s ease;margin-bottom:15px;border-top:5px solid #2563eb;}.color-card-green{border-top-color:#059669;}.color-card-purple{border-top-color:#7c3aed;}.color-card-amber{border-top-color:#d97706;}.color-card-rose{border-top-color:#e11d48;}.color-card:hover{box-shadow:0 12px 28px rgba(0,0,0,0.12);transform:translateY(-4px);}.card-icon-header{display:flex;align-items:center;justify-content:space-between;}.card-icon{font-size:2rem;}.card-tag-color{font-size:0.72rem;font-weight:800;padding:4px 12px;border-radius:20px;letter-spacing:0.5px;}.tag-blue{background:#dbeafe;color:#1e40af;}.tag-green{background:#d1fae5;color:#065f46;}.tag-purple{background:#ede9fe;color:#5b21b6;}.tag-soon{background:#f1f5f9;color:#64748b;}.color-card-title{color:#0f172a;font-size:1.25rem;font-weight:800;margin:10px 0 6px 0;}.color-card-desc{color:#475569;font-size:0.9rem;line-height:1.45;margin:0;}</style>"
 
+
 # ============================================================
 # 2. FUNCIONES CORE INTELIGENTES
 # ============================================================
@@ -554,11 +555,11 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas,
       th = f"<b>📍 Pos: [{slot['id_posicion']}]</b><br>📦 SKU: {slot['sku']}<br>🏷️ Pasillo: {slot['letra_pasillo']} | Módulo: {slot['modulo']} | Nivel: {slot['nivel']}<br>📏 Alto Carga: {ac:.2f}m" + (" <b style='color:#e74c3c;'>(SALDO)</b>" if es else "")
       if skus_buscados: cc, cm = ((c_s["Destacado"] if es else c_f["Destacado"], c_mad) if slot["sku"] in skus_buscados else (c_s["Apagado"] if es else c_f["Apagado"], c_mada))
       else: cm, cc = c_mad, (c_s if es else c_f).get(slot["abc_xyz"] if "9 Zonas" in modo_vista else slot["abc"], (c_s if es else c_f).get("C" if "3 Zonas" in modo_vista else "CZ"))
-      add_cube_rotated(cm, slot["x_pal"], slot["y"] + 0.05, slot["z"] + 0.02, res["ap_w"], res["pp_d"] - 0.1, 0.12, is_vertical, hover_txt=th)
+      add_cube_rotated(cm, slot["x_pal"], slot["y"] + 0.05, slot["z"] + 0.02, res["ap_w"], res["pp_d"] - 0.1, 0.12, is_vertical)
       rx, ry = ((slot["y"] + 0.05, slot["x_pal"] + 0.05) if is_vertical else (slot["x_pal"] + 0.05, slot["y"] + 0.05))
       wc, dc = ((res["pp_d"] - 0.1, res["ap_w"] - 0.1) if is_vertical else (res["ap_w"] - 0.1, res["pp_d"] - 0.2))
-      if ec: cc.agregar_cilindro(rx + wc / 2, ry + dc / 2, slot["z"] + 0.14, min(wc, dc) / 2, ac, hover_txt=th)
-      else: cc.agregar_cubo(rx, ry, slot["z"] + 0.14, wc, dc, ac, hover_txt=th)
+      if ec: cc.agregar_cilindro(rx + wc / 2, ry + dc / 2, slot["z"] + 0.14, min(wc, dc) / 2, ac, th)
+      else: cc.agregar_cubo(rx, ry, slot["z"] + 0.14, wc, dc, ac, th)
   c_puertas_cortina = MallaAgrupada("#f1c40f", "Cortina", 0.4); c_puertas_marcos = MallaAgrupada("#f39c12", "Marco", 1.0); alt_puerta = 4.5
   for p in puertas:
     pared, pos, w = p["pared"], p["pos"], p["w"]
@@ -576,10 +577,10 @@ def generar_layout_3d(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas,
     tr = c.obtener_trazo()
     if tr: _ = fig_3d.add_trace(tr)
   ef = ("<b style='color:#e67e22;'>[FOCO ACTIVO]</b><br>" if skus_buscados else "")
-  _ = fig_3d.update_layout(title=dict(text=(f"{ef}<b>Gemelo Digital 3D | Formatos Reales</b><br><sup>Ubicados: {res['pallets_ubicados_totales']} pallets</sup>"), x=0.5, font=dict(size=16)), scene=dict(xaxis=dict(title="Largo X (m)", range=[-5, l_m + 5], backgroundcolor="white"), yaxis=dict(title="Ancho Y (m)", range=[-5, a_m + 5], backgroundcolor="white"), zaxis=dict(title="Alto Z (m)", range=[0, max(10, alt_m + 1)], backgroundcolor="white"), aspectmode="data", camera=dict(eye=dict(x=1.5, y=1.5, z=1.2))), margin=dict(r=0, l=0, b=0, t=80), height=750, paper_bgcolor="white", showlegend=False)
+  _ = fig_3d.update_layout(title=dict(text=(f"{ef}<b>Gemelo Digital 3D | Formatos Reales</b><br><sup>Ubicados: {res['pallets_ubicados_totales']} pallets</sup>"), x=0.5, font=dict(size=16)), scene=dict(xaxis=dict(title="Largo X (m)", range=[-5, l_m + 5], backgroundcolor="white"), yaxis=dict(title="Ancho Y (m)", range=[-5, a_m + 5], backgroundcolor="white"), zaxis=dict(title="Alto Z (m)", range=[0, max(10, alt_m + 1)], backgroundcolor="white"), aspectmode="data", camera=dict(eye=dict(x=1.5, y=1.5, z=1.2))), margin=dict(r=0, l=0, b=0, t=80), height=800, paper_bgcolor="white", showlegend=False)
   return fig_3d
 
-# --- OPCIÓN 2: NUEVO MOTOR 3D THREE.JS / WEBGL COMPLETO (HOVER + SIN CARTELES, MEJOR CÁMARA) ---
+# --- OPCIÓN 2: NUEVO MOTOR 3D THREE.JS / WEBGL COMPLETO (HOVER / FIX ASPECT RATIO) ---
 def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas, modo_vista):
   datos_bodega = {
       "largo": l_m, "ancho": a_m, "alto": alt_m, "is_vertical": is_vertical,
@@ -610,7 +611,7 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
     <head>
         <style>
             body { margin: 0; overflow: hidden; background-color: #0f172a; font-family: system-ui, -apple-system, sans-serif; }
-            #canvas-container { width: 100vw; height: 100vh; position: absolute; top:0; left:0; }
+            #canvas-container { width: 100vw; height: 100vh; position: relative; }
             #info-overlay { position: absolute; top: 15px; left: 15px; color: white; background: rgba(15, 23, 42, 0.88); padding: 12px 18px; border-radius: 8px; border: 1px solid #334155; font-size: 13px; pointer-events: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
             #tooltip { position: absolute; background: rgba(15, 23, 42, 0.95); color: #fff; padding: 12px; border-radius: 6px; pointer-events: none; display: none; z-index: 1000; font-size: 13px; border: 1px solid #38bdf8; box-shadow: 0 6px 12px rgba(0,0,0,0.4); line-height: 1.5; min-width: 180px; }
         </style>
@@ -620,8 +621,8 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
     <body>
         <div id="info-overlay">
             ✨ <b>Gemelo Digital HD Completo (WebGL)</b><br>
-            🏢 <i>Apunta a un pallet con el mouse para ver sus detalles.</i><br>
-            🎮 <i>Clic Izq: Rotar 360° | Clic Der: Desplazar | Rueda: Zoom</i>
+            🏢 <i>Mueve el ratón sobre un pallet para ver sus datos.</i><br>
+            🎮 <i>Clic Izq: Rotar | Clic Der: Desplazar | Rueda: Zoom</i>
         </div>
         <div id="canvas-container">
             <div id="tooltip"></div>
@@ -635,10 +636,12 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
             const tooltip = document.getElementById('tooltip');
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0x0f172a);
-            scene.fog = new THREE.FogExp2(0x0f172a, 0.006);
+            scene.fog = new THREE.FogExp2(0x0f172a, 0.008);
 
-            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.5, 1500);
-            camera.position.set(data.largo * 1.2, data.alto * 3.0, data.ancho * 1.5);
+            // Ajuste dinámico de cámara para evitar visión distorsionada/apretada
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.5, 1000);
+            const maxDim = Math.max(data.largo, data.ancho);
+            camera.position.set(data.largo * 1.2, maxDim * 0.8, data.ancho * 1.5);
 
             const renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -650,6 +653,7 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
             controls.target.set(data.largo / 2, 0, data.ancho / 2);
             controls.update();
 
+            // Mantiene las proporciones reales cuando cambia el tamaño de la ventana
             window.addEventListener('resize', () => {
                 camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
@@ -693,42 +697,13 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
                 }
             });
 
-            function createOfficeFloorLabel(w, d) {
-                const canvas = document.createElement('canvas');
-                canvas.width = 512;
-                canvas.height = 256;
-                const ctx = canvas.getContext('2d');
-                ctx.fillStyle = '#475569';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                ctx.strokeStyle = '#94a3b8';
-                ctx.lineWidth = 15;
-                ctx.strokeRect(0, 0, canvas.width, canvas.height);
-                ctx.font = 'bold 70px sans-serif';
-                ctx.fillStyle = '#ffffff';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText("OFICINA", canvas.width / 2, canvas.height / 2);
-                
-                const texture = new THREE.CanvasTexture(canvas);
-                texture.minFilter = THREE.LinearFilter;
-                const mat = new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: 0.85 });
-                const geo = new THREE.PlaneGeometry(w * 0.8, d * 0.8);
-                const mesh = new THREE.Mesh(geo, mat);
-                mesh.rotation.x = -Math.PI / 2;
-                return mesh;
-            }
-
-            const offMat = new THREE.MeshStandardMaterial({ color: 0x64748b, transparent: true, opacity: 0.3, roughness: 0.1, metalness: 0.5 });
+            const offMat = new THREE.MeshStandardMaterial({ color: 0x64748b, transparent: true, opacity: 0.75, roughness: 0.1, metalness: 0.5 });
             data.oficinas.forEach(o => {
                 const h = o.h || 3.5;
                 const mesh = new THREE.Mesh(new THREE.BoxGeometry(o.w, h, o.d), offMat);
                 mesh.position.set(o.x + o.w/2, h/2, o.y + o.d/2);
                 mesh.castShadow = true;
                 scene.add(mesh);
-                
-                const label = createOfficeFloorLabel(o.w, o.d);
-                label.position.set(o.x + o.w/2, 0.05, o.y + o.d/2);
-                scene.add(label);
             });
 
             const stMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
@@ -779,8 +754,6 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
             });
 
             let meshesInteractivos = [];
-
-            const palletBaseMat = new THREE.MeshStandardMaterial({ color: 0xb88252, roughness: 0.8 });
             const colMapABC = { 'A': 0xef4444, 'B': 0xf59e0b, 'C': 0x3b82f6 };
             const colMapXYZ = { 'AX': 0x900C3F, 'AY': 0xC70039, 'AZ': 0xFF5733, 'BX': 0xE67E22, 'BY': 0xF39C12, 'BZ': 0xF1C40F, 'CX': 0x2E86C1, 'CY': 0x3498DB, 'CZ': 0x85C1E9 };
 
@@ -791,21 +764,14 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
                     
                     let opacidad = 1.0;
                     let colorFinal = colHex;
-                    
-                    if (data.hay_filtro && !s.destacado) {
-                        opacidad = 0.10;
-                        colorFinal = 0x94a3b8;
-                    } else if (data.hay_filtro && s.destacado) {
-                        colHex = 0x22c55e;
-                        colorFinal = colHex;
-                    }
+                    if (data.hay_filtro && !s.destacado) { opacidad = 0.10; colorFinal = 0x94a3b8; }
+                    else if (data.hay_filtro && s.destacado) { colHex = 0x22c55e; colorFinal = colHex; }
 
                     const isV = data.is_vertical;
                     const px = isV ? s.y + 0.05 : s.x; const py = isV ? s.x + 0.05 : s.y + 0.05;
                     const pW = isV ? data.pp_d - 0.1 : data.ap_w; const pD = isV ? data.ap_w : data.pp_d - 0.1;
 
-                    const pbMat = new THREE.MeshStandardMaterial({ color: 0xb88252, roughness: 0.8, transparent: opacidad < 1, opacity: opacidad });
-                    const pBaseMesh = new THREE.Mesh(new THREE.BoxGeometry(pW, 0.12, pD), pbMat);
+                    const pBaseMesh = new THREE.Mesh(new THREE.BoxGeometry(pW, 0.12, pD), new THREE.MeshStandardMaterial({ color: 0xb88252, roughness: 0.8, transparent: opacidad < 1, opacity: opacidad }));
                     pBaseMesh.position.set(px + pW/2, s.z + 0.06, py + pD/2);
                     if (opacidad === 1) { pBaseMesh.castShadow = true; pBaseMesh.receiveShadow = true; }
                     scene.add(pBaseMesh);
@@ -860,7 +826,14 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
     </html>
     """
   html_final = html_template.replace("__DATOS_JSON__", json_data).replace("__MODO_VISTA__", modo_vista)
-  components.html(html_final, height=850)
+  components.html(html_final, height=800)
+
+
+# ============================================================
+# 5. MÓDULOS DE PÁGINAS (UI)
+# ============================================================
+def cambiar_menu(pagina):
+  st.session_state.menu_seleccion = pagina
 
 def mostrar_portada():
   st.markdown(color_styles, unsafe_allow_html=True)
@@ -893,7 +866,7 @@ def mostrar_portada():
         unsafe_allow_html=True,
     )
     st.button(
-        "⚙️ Abrir Diseñador Layout",
+        "⚙️️ Abrir Diseñador Layout",
         key="btn_lay",
         type="primary",
         use_container_width=True,
@@ -1411,7 +1384,7 @@ def mostrar_cubicadora():
                     " border-radius: 0 0 12px 0; padding: 20px; background:"
                     " #ffffff; height: 100%; display:flex; align-items:center;"
                     " justify-content:center;'><div style='text-align:center;"
-                    " color:#64748b;'><h4 style='margin:0;'>⚠️ Carga desde"
+                    " color:#64748b;'><h4 style='margin:0;'>⚠ Carga desde"
                     " Reporte Optimizado</h4><p style='font-size:12px;'>El"
                     " reporte optimizado no contiene las dimensiones crudas"
                     " (Largo, Ancho, Alto) necesarias para dibujar el plano"
@@ -1460,6 +1433,7 @@ def mostrar_cubicadora():
       st.dataframe(df_f, use_container_width=True)
   else:
     st.info("👆 Sube tu archivo Excel para comenzar.")
+
 
 def mostrar_layout():
   st.title("🏗️ Diseñador de Layout de Bodega")
@@ -1611,7 +1585,7 @@ def mostrar_layout():
     )
 
     btn_crear_sel = st.button(
-        "🎯 Buscar / Crear Layout",
+        "🎯 Buscar / Crear Layout (SKUs Seleccionados)",
         type="primary",
         use_container_width=True,
     )
