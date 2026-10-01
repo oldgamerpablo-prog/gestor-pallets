@@ -1,5 +1,6 @@
 import base64
 import io
+import json
 import math
 import re
 import unicodedata
@@ -71,6 +72,7 @@ parametros_layout = {
     "chk_b": True,
     "chk_c": True,
     "modo_vista_color": "3 Zonas (ABC)",
+    "motor_3d_layout": "Three.js WebGL (HD)",
 }
 for k, v in parametros_layout.items():
   if k not in st.session_state:
@@ -490,7 +492,7 @@ def calcular_metricas_dinamicas(fila, mapa, modo="EXCEL"):
   elif cap_usada <= 0:
     estado = "REVISAR DATOS"
   elif es_numero(peso_pal) and peso_pal > MAX_PESO_PALLET:
-    estado = "⚠️️ PELIGRO: SOBREPESO (>1200kg)"
+    estado = "⚠ PELIGRO: SOBREPESO (>1200kg)"
   elif modo == "EXCEL" and abs((cap_op - cap_ex) if es_numero(cap_ex) else 0) > 0:
     estado = f"⚠️ EXCEL: {int(cap_ex)}u | ÓPTIMO: {cap_op}u"
 
@@ -1246,6 +1248,7 @@ def add_cube_rotated(
     capa.agregar_cubo(x0, y0, z0, dx, dy, dz, hover_txt)
 
 
+# --- OPCIÓN 1: MOTOR 3D PLOTLY (ORIGINAL) ---
 def generar_layout_3d(
     res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas, modo_vista
 ):
@@ -1503,6 +1506,143 @@ def generar_layout_3d(
   )
 
   return fig_3d
+
+
+# --- OPCIÓN 2: NUEVO MOTOR 3D THREE.JS / WEBGL (HD) ---
+def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, modo_vista):
+  datos_bodega = {
+      "largo": l_m,
+      "ancho": a_m,
+      "alto": alt_m,
+      "is_vertical": is_vertical,
+      "slots": [
+          {
+              "x": s["x_pal"],
+              "y": s["y"],
+              "z": s["z"],
+              "sku": s.get("sku", ""),
+              "abc": s.get("abc", "C"),
+              "abc_xyz": s.get("abc_xyz", "CZ"),
+              "ocupado": s["ocupado"],
+              "es_cilindro": s.get("es_cilindro", False),
+              "es_saldo": s.get("es_saldo", False),
+              "alt_p": s.get("alt_p", 1.2),
+          }
+          for s in res["almacen"]
+      ],
+      "racks": [
+          {"x": m["x"], "y": m["y"], "bloqueado": m["bloqueado"]}
+          for m in res["modulos_list"]
+      ],
+      "pilares": res["pilares_reales"],
+      "oficinas": res["oficinas"],
+  }
+
+  json_data = json.dumps(datos_bodega)
+
+  html_threejs = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ margin: 0; overflow: hidden; background-color: #0f172a; font-family: system-ui, -apple-system, sans-serif; }}
+            #canvas-container {{ width: 100vw; height: 720px; }}
+            #info-overlay {{ position: absolute; top: 15px; left: 15px; color: white; background: rgba(15, 23, 42, 0.85); padding: 12px 18px; border-radius: 8px; border: 1px solid #334155; font-size: 13px; pointer-events: none; z-index: 100; }}
+        </style>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    </head>
+    <body>
+        <div id="info-overlay">
+            ✨ <b>Gemelo Digital HD (WebGL / Three.js)</b><br>
+            🎮 <i>Clic Izq: Rotar 360° | Clic Der: Desplazar | Rueda: Zoom</i>
+        </div>
+        <div id="canvas-container"></div>
+
+        <script>
+            const data = {json_data};
+            const modoVista = "{modo_vista}";
+            
+            const container = document.getElementById('canvas-container');
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0f172a);
+            scene.fog = new THREE.FogExp2(0x0f172a, 0.01);
+
+            const camera = new THREE.PerspectiveCamera(45, window.innerWidth / 720, 1, 1000);
+            camera.position.set(data.largo * 1.2, data.alto * 2.5, data.ancho * 1.4);
+
+            const renderer = new THREE.WebGLRenderer({{ antialias: true }});
+            renderer.setSize(window.innerWidth, 720);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.target.set(data.largo / 2, 0, data.ancho / 2);
+            controls.update();
+
+            // Iluminación
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            scene.add(ambientLight);
+
+            const sunLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            sunLight.position.set(data.largo / 2, 35, data.ancho / 2);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            scene.add(sunLight);
+
+            // Suelo de Concreto
+            const floorGeo = new THREE.PlaneGeometry(data.largo + 20, data.ancho + 20);
+            const floorMat = new THREE.MeshStandardMaterial({{ color: 0x1e293b, roughness: 0.5, metalness: 0.2 }});
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.set(data.largo / 2, -0.05, data.ancho / 2);
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            const grid = new THREE.GridHelper(Math.max(data.largo, data.ancho) + 20, 40, 0x38bdf8, 0x334155);
+            grid.position.set(data.largo / 2, 0, data.ancho / 2);
+            scene.add(grid);
+
+            // Racks
+            const rackMat = new THREE.MeshStandardMaterial({{ color: 0x0f172a, roughness: 0.3, metalness: 0.8 }});
+            data.racks.forEach(r => {{
+                const colGeo = new THREE.BoxGeometry(0.1, data.alto, 0.1);
+                const p1 = new THREE.Mesh(colGeo, rackMat);
+                p1.position.set(r.x, data.alto/2, r.y);
+                p1.castShadow = true;
+                scene.add(p1);
+            }});
+
+            // Pallets y Cargas
+            const colMapABC = {{ 'A': 0xef4444, 'B': 0xf59e0b, 'C': 0x3b82f6 }};
+            data.slots.forEach(s => {{
+                if(s.ocupado) {{
+                    const color = colMapABC[s.abc] || 0x3b82f6;
+                    const mat = new THREE.MeshStandardMaterial({{ color: color, roughness: 0.5 }});
+                    const h = Math.max(0.3, s.alt_p);
+                    const geo = s.es_cilindro ? new THREE.CylinderGeometry(0.5, 0.5, h, 16) : new THREE.BoxGeometry(1.1, h, 1.1);
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(s.x, s.z + h/2 + 0.1, s.y);
+                    mesh.castShadow = true;
+                    mesh.receiveShadow = true;
+                    scene.add(mesh);
+                }}
+            }});
+
+            function animate() {{
+                requestAnimationFrame(animate);
+                controls.update();
+                renderer.render(scene, camera);
+            }}
+            animate();
+        </script>
+    </body>
+    </html>
+    """
+
+  components.html(html_threejs, height=730)
 
 
 # ============================================================
@@ -2626,7 +2766,7 @@ def mostrar_layout():
     st.markdown("---")
     res = st.session_state.res_layout_actual
 
-    col_exp1, col_exp2 = st.columns([1, 1])
+    col_exp1, col_exp2, col_exp3 = st.columns([1, 1, 1])
     with col_exp1:
       st.session_state.modo_vista_color = st.selectbox(
           "🎨 Zonificación de Colores Racks:",
@@ -2636,6 +2776,16 @@ def mostrar_layout():
           ),
       )
     with col_exp2:
+      st.session_state.motor_3d_layout = st.selectbox(
+          "🎮 Motor Gráfico 3D:",
+          ["Three.js WebGL (HD)", "Plotly 3D (Original)"],
+          index=["Three.js WebGL (HD)", "Plotly 3D (Original)"].index(
+              st.session_state.get(
+                  "motor_3d_layout", "Three.js WebGL (HD)"
+              )
+          ),
+      )
+    with col_exp3:
       st.markdown(
           "<div style='height:28px;'></div>", unsafe_allow_html=True
       )
@@ -2943,19 +3093,33 @@ def mostrar_layout():
 
     if mostrar_3d_layout:
       with st.spinner("Construyendo Mallas 3D de la Bodega..."):
-        st.plotly_chart(
-            generar_layout_3d(
-                res,
-                l_m,
-                a_m,
-                st.session_state.alt_bod,
-                res["is_vertical"],
-                skus_b,
-                puertas,
-                st.session_state.modo_vista_color,
-            ),
-            use_container_width=True,
-        )
+        if (
+            st.session_state.get("motor_3d_layout")
+            == "Three.js WebGL (HD)"
+        ):
+          generar_layout_3d_threejs(
+              res,
+              l_m,
+              a_m,
+              st.session_state.alt_bod,
+              res["is_vertical"],
+              skus_b,
+              st.session_state.modo_vista_color,
+          )
+        else:
+          st.plotly_chart(
+              generar_layout_3d(
+                  res,
+                  l_m,
+                  a_m,
+                  st.session_state.alt_bod,
+                  res["is_vertical"],
+                  skus_b,
+                  puertas,
+                  st.session_state.modo_vista_color,
+              ),
+              use_container_width=True,
+          )
 
 
 def mostrar_analytics():
@@ -3141,7 +3305,7 @@ def mostrar_analytics():
         color_discrete_map={
             "✅ OK": "#10b981",
             "❌ SIN STOCK": "#64748b",
-            "⚠️️ REVISAR DATOS": "#f59e0b",
+            "⚠ REVISAR DATOS": "#f59e0b",
             "🚨 SOBREPESO (>1200kg)": "#ef4444",
         },
     )
@@ -3155,9 +3319,6 @@ def mostrar_analytics():
     st.plotly_chart(fig_scatter, use_container_width=True)
 
 
-# ============================================================
-# VISTA NUEVA: MODELO 3D SKETCHUP
-# ============================================================
 def mostrar_sketchup_3d():
   st.title("📦 Visor 3D Interactivo - Modelo SketchUp")
   st.markdown(
@@ -3165,7 +3326,6 @@ def mostrar_sketchup_3d():
       " desde SketchUp."
   )
 
-  # Enlace RAW directo a tu archivo Alexander - 1.glb en GitHub (rama desarrollo)
   URL_MODELO_3D = "https://raw.githubusercontent.com/oldgamerpablo-prog/gestor-pallets/desarrollo/Alexander%20-%201.glb"
 
   html_visor_3d = f"""
@@ -3218,7 +3378,7 @@ menu_opciones = [
     "📦 Cubicadora WMS",
     "🏗️ Layout de Bodega",
     "📊 Analytics & Reportería",
-    "📦 Modelo 3D SketchUp",  # <--- Nueva Opción Agregada
+    "📦 Modelo 3D SketchUp",
     "📥 Entrada Mercadería",
     "📤 Salida Mercadería",
 ]
