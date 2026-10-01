@@ -311,7 +311,7 @@ def calcular_metricas_dinamicas(fila, mapa, modo="EXCEL"):
   estado = "OK"
   if stock <= 0: estado = "SIN STOCK"
   elif cap_usada <= 0: estado = "REVISAR DATOS"
-  elif es_numero(peso_pal) and peso_pal > MAX_PESO_PALLET: estado = "⚠️️ PELIGRO: SOBREPESO (>1200kg)"
+  elif es_numero(peso_pal) and peso_pal > MAX_PESO_PALLET: estado = "⚠️ PELIGRO: SOBREPESO (>1200kg)"
   elif modo == "EXCEL" and abs((cap_op - cap_ex) if es_numero(cap_ex) else 0) > 0: estado = f"⚠️ EXCEL: {int(cap_ex)}u | ÓPTIMO: {cap_op}u"
 
   return {"Capacidad_Usada": cap_usada, "Pallets": pallets, "Unidades_Ultimo": ult_unids, "Ocupacion_Ultimo": ((ult_unids / cap_usada * 100) if cap_usada > 0 else 0), "Peso_Pallet": peso_pal, "Estado": estado, "Cap_Excel": cap_ex, "Cap_Optima": cap_op, "Eficiencia_Volumen": efi_vol, "Pallets_Completos": pallets_comp, "Unidades_Sobrante": u_sob, "Stock": stock}
@@ -388,62 +388,6 @@ def html_vista_lateral(fila, mapa, cap_usada, total_unidades=None):
   bloques += [f"<div class='box-3d' style='position:absolute; left:{i*cw:.2f}px; bottom:{hp*ey + niv_c*ch:.2f}px; width:{cw-1:.2f}px; height:{ch-1:.2f}px; box-sizing:border-box; background:{mat['bg_side']}; border:1px solid {mat['border']}; border-radius:{mat['radius']}; box-shadow:inset 1px 1px 2px rgba(255,255,255,0.2), 2px 2px 4px rgba(0,0,0,0.3);'></div>" for i in range(c_top if c_top > 0 else (1 if u_sob > 0 else 0))]
   return f"<div style='position:relative; width:{lp*ex + 40:.2f}px; height:{alto_v*ey + 30:.2f}px; margin: 10px auto;'><div class='cota-linea-v' style='bottom: 0; left: 0; width: 10px; height: {alto_v*ey}px;'><span class='cota-texto' style='transform: rotate(-90deg); white-space:nowrap;'>{fmt(alto_v,0)} cm</span></div><div style='position:absolute; left:25px; bottom:0; width:{lp*ex:.2f}px; height:{alto_v*ey:.2f}px;'><div style='position:absolute; left:0; bottom:0; width:{lp*ex:.2f}px; height:{hp*ey:.2f}px; background:#b88252; border:1px solid #754b28; border-radius:2px; box-shadow: 2px 2px 4px rgba(0,0,0,0.3);'><div style='position:absolute; left:18%; bottom:15%; width:22%; height:70%; background:#2c1b12; border-radius:2px;'></div><div style='position:absolute; right:18%; bottom:15%; width:22%; height:70%; background:#2c1b12; border-radius:2px;'></div></div>{''.join(bloques)}<div style='position:absolute; left:0; bottom:{alto_v*ey:.2f}px; width:110%; border-top:2px dashed #ef4444; z-index:20;'></div><div style='position:absolute; right:-25px; bottom:{alto_v*ey-10:.2f}px; font-size:10px; color:#ef4444; font-weight:700;'>MÁX</div></div></div>"
 
-class MallaAgrupada:
-  def __init__(self, color, nombre, opacidad=1.0):
-    self.color, self.nombre, self.opacidad = color, nombre, opacidad
-    self.x, self.y, self.z, self.i, self.j, self.k, self.text = [], [], [], [], [], [], []
-    self.contador = 0
-  def agregar_cubo(self, x0, y0, z0, dx, dy, dz, hover_txt=None):
-    off = len(self.x)
-    self.x.extend([x0, x0 + dx, x0 + dx, x0, x0, x0 + dx, x0 + dx, x0])
-    self.y.extend([y0, y0, y0 + dy, y0 + dy, y0, y0, y0 + dy, y0 + dy])
-    self.z.extend([z0, z0, z0, z0, z0 + dz, z0 + dz, z0 + dz, z0 + dz])
-    self.i.extend([idx + off for idx in [7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2]])
-    self.j.extend([idx + off for idx in [3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3]])
-    self.k.extend([idx + off for idx in [0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6]])
-    if hover_txt: self.text.extend([hover_txt] * 8)
-    self.contador += 1
-  def agregar_cilindro(self, xc, yc, zb, r, h, hover_txt=None):
-    l = 8; off = len(self.x)
-    for i in range(l):
-      ang = 2 * math.pi * i / l
-      self.x.extend([xc + r * math.cos(ang)] * 2); self.y.extend([yc + r * math.sin(ang)] * 2); self.z.extend([zb, zb + h])
-      if hover_txt: self.text.extend([hover_txt] * 2)
-    self.x.extend([xc] * 2); self.y.extend([yc] * 2); self.z.extend([zb, zb + h])
-    if hover_txt: self.text.extend([hover_txt] * 2)
-    cb, ct = off + l * 2, off + l * 2 + 1
-    for i in range(l):
-      nxt = (i + 1) % l
-      b1, t1, b2, t2 = off + i * 2, off + i * 2 + 1, off + nxt * 2, off + nxt * 2 + 1
-      self.i.extend([b1, t1, cb, ct]); self.j.extend([b2, b2, b2, t1]); self.k.extend([t1, t2, b1, t2])
-    self.contador += 1
-  def obtener_trazo(self):
-    if not self.x: return None
-    return go.Mesh3d(x=self.x, y=self.y, z=self.z, i=self.i, j=self.j, k=self.k, color=self.color, opacity=self.opacidad, name=self.nombre, text=self.text if self.text else None, hoverinfo="text" if self.text else "name", showscale=False, flatshading=True)
-
-def renderizar_3d_plotly(fila, mapa, cap_usada, total_unidades=None):
-  lp, ap, hp = a_float(valor_col(fila, "largo_pallet", mapa), 120), a_float(valor_col(fila, "ancho_pallet", mapa), 120), a_float(valor_col(fila, "altura_pallet", mapa), 15)
-  largo, ancho, alto = a_float(valor_col(fila, "largo", mapa)), a_float(valor_col(fila, "ancho", mapa)), a_float(valor_col(fila, "alto", mapa))
-  target = int(cap_usada) if total_unidades is None else int(total_unidades)
-  lay = mejor_distribucion_filas(largo, ancho, lp, ap)
-  if lay["cantidad"] <= 0 or target <= 0: return go.Figure()
-  m_base = MallaAgrupada("#c18c5d", "Madera")
-  m_base.agregar_cubo(0, 0, hp * 0.8, lp, ap, hp * 0.2)
-  m_base.agregar_cubo(0, 0, 0, lp * 0.1, ap, hp * 0.8); m_base.agregar_cubo((lp - lp * 0.1) / 2, 0, 0, lp * 0.1, ap, hp * 0.8); m_base.agregar_cubo(lp - lp * 0.1, 0, 0, lp * 0.1, ap, hp * 0.8)
-  m_carga = MallaAgrupada("#2563eb" if es_formato_circular(valor_col(fila, "formato", mapa)) else "#d4a373", "Carga")
-  u_p, niv = 0, 0
-  while u_p < target:
-    for c in lay["cajas"]:
-      if u_p >= target: break
-      if es_formato_circular(valor_col(fila, "formato", mapa)): m_carga.agregar_cilindro(c["x"] + c["largo"] / 2, c["y"] + c["ancho"] / 2, hp + niv * alto, min(c["largo"], c["ancho"]) / 2 - 0.2, alto - 0.5)
-      else: m_carga.agregar_cubo(c["x"] + 0.25, c["y"] + 0.25, hp + niv * alto, c["largo"] - 0.5, c["ancho"] - 0.5, alto - 0.25)
-      u_p += 1
-    niv += 1
-  fig = go.Figure(data=[m_base.obtener_trazo(), m_carga.obtener_trazo()])
-  sku_name = valor_col(fila, "sku", mapa)
-  _ = fig.update_layout(title=dict(text=f"<b>📦 Pallet Unitario ({sku_name})</b>", x=0.5, font=dict(size=11, color="#475569")), scene=dict(xaxis=dict(visible=False), yaxis=dict(visible=False), zaxis=dict(visible=False), aspectmode="data"), margin=dict(r=0, l=0, b=0, t=25), height=300)
-  return fig
-
 # ============================================================
 # 4. MOTOR DE CÁLCULO LAYOUT 3D
 # ============================================================
@@ -516,7 +460,7 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     r_ub.append({"Ubicadas": u})
   return {"modulos": m_v, "niveles": niv, "capacidad": len(alm), "demanda": int(df_activa["Cantidad_Pallets"].sum()), "diferencia": len(alm) - int(df_activa["Cantidad_Pallets"].sum()), "staging": sz, "oficinas": conf.get("oficinas", []), "modulos_list": m_l, "almacen": alm, "pilares_reales": pil_r, "pallets_ubicados_totales": sum(r["Ubicadas"] for r in r_ub), "alt_nivel_viga": a_n_v, "l_modulo": l_mod, "t_marco": t_m, "pp_d": pp_d, "ap_w": ap_w, "viga_h": 0.12, "is_vertical": is_vertical}
 
-# --- NUEVO MOTOR 3D THREE.JS / WEBGL COMPLETO (HOVER / FIX ASPECT RATIO / PINTURAS DEMARCACIÓN) ---
+# --- NUEVO MOTOR 3D THREE.JS / WEBGL COMPLETO ---
 def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas, modo_vista):
   datos_bodega = {
       "largo": l_m, "ancho": a_m, "alto": alt_m, "is_vertical": is_vertical,
@@ -621,7 +565,6 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
             const lineMat = new THREE.LineBasicMaterial({ color: 0xeab308, linewidth: 3 });
             scene.add(new THREE.Line(lineGeo, lineMat));
 
-            // Funciones de Demarcación para Techos y Suelos (Pintura en Plano)
             function createFloorLabel(text, w, d, textColor) {
                 const canvas = document.createElement('canvas');
                 canvas.width = 512; canvas.height = 128;
@@ -750,16 +693,26 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
             data.slots.forEach(s => {
                 if (s.ocupado) {
                     let colHex = colMapABC[s.abc] || 0x3b82f6;
-                    if (modoVista === '9 Zonas (ABC-XYZ)') { colHex = colMapXYZ[s.abc_xyz] || colHex; }
-                    
+                    if (modoVista === '9 Zonas (ABC-XYZ)') {
+                        colHex = colMapXYZ[s.abc_xyz] || colHex;
+                    }
+
                     let opacidad = 1.0;
                     let colorFinal = colHex;
-                    if (data.hay_filtro && !s.destacado) { opacidad = 0.10; colorFinal = 0x94a3b8; }
-                    else if (data.hay_filtro && s.destacado) { colHex = 0x22c55e; colorFinal = colHex; }
+                    
+                    if (data.hay_filtro && !s.destacado) {
+                        opacidad = 0.10;
+                        colorFinal = 0x94a3b8;
+                    } else if (data.hay_filtro && s.destacado) {
+                        colHex = 0x22c55e;
+                        colorFinal = colHex;
+                    }
 
                     const isV = data.is_vertical;
-                    const px = isV ? s.y + 0.05 : s.x; const py = isV ? s.x + 0.05 : s.y + 0.05;
-                    const pW = isV ? data.pp_d - 0.1 : data.ap_w; const pD = isV ? data.ap_w : data.pp_d - 0.1;
+                    const px = isV ? s.y + 0.05 : s.x;
+                    const py = isV ? s.x + 0.05 : s.y + 0.05;
+                    const pW = isV ? data.pp_d - 0.1 : data.ap_w;
+                    const pD = isV ? data.ap_w : data.pp_d - 0.1;
 
                     const pbMat = new THREE.MeshStandardMaterial({ color: 0xb88252, roughness: 0.8, transparent: opacidad < 1, opacity: opacidad });
                     const pBaseMesh = new THREE.Mesh(new THREE.BoxGeometry(pW, 0.12, pD), pbMat);
@@ -770,6 +723,7 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
                     const h = Math.max(0.3, s.alt_p - 0.12);
                     const cargoMat = new THREE.MeshStandardMaterial({ color: colorFinal, roughness: 0.5, transparent: opacidad < 1, opacity: opacidad });
                     let cargoMesh;
+
                     if (s.es_cilindro) {
                         const radius = Math.min(pW, pD) / 2.2;
                         cargoMesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, h, 16), cargoMat);
@@ -778,6 +732,7 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
                         cargoMesh = new THREE.Mesh(new THREE.BoxGeometry(pW - 0.05, h, pD - 0.05), cargoMat);
                         cargoMesh.position.set(px + pW/2, s.z + 0.12 + h/2, -(py + pD/2));
                     }
+
                     if (opacidad === 1) { cargoMesh.castShadow = true; cargoMesh.receiveShadow = true; }
                     
                     cargoMesh.userData = { id: s.id, sku: s.sku, letra: s.letra, modulo: s.modulo, nivel: s.nivel, zona: modoVista === '9 Zonas (ABC-XYZ)' ? s.abc_xyz : s.abc, alt: s.alt_p };
@@ -810,13 +765,19 @@ def generar_layout_3d_threejs(res, l_m, a_m, alt_m, is_vertical, skus_buscados, 
                 }
             });
 
-            function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+            function animate() {
+                requestAnimationFrame(animate);
+                controls.update();
+                renderer.render(scene, camera);
+            }
             animate();
         </script>
     </body>
     </html>
     """
-  html_final = html_template.replace("__DATOS_JSON__", json_data).replace("__MODO_VISTA__", modo_vista)
+  html_final = html_template.replace("__DATOS_JSON__", json_data).replace(
+      "__MODO_VISTA__", modo_vista
+  )
   components.html(html_final, height=860)
 
 
@@ -1039,11 +1000,15 @@ def mostrar_outbound():
 menu_opciones = [
     "🏠 Portada Principal",
     "📦 Cubicadora WMS",
-    "🏗️️ Layout de Bodega",
+    "🏗️ Layout de Bodega",
     "📊 Analytics & Reportería",
     "📥 Entrada Mercadería",
     "📤 Salida Mercadería",
 ]
+
+# Regla de seguridad añadida: si el estado falla, regresa a la portada.
+if st.session_state.menu_seleccion not in menu_opciones:
+    st.session_state.menu_seleccion = menu_opciones[0]
 
 st.session_state.menu_seleccion = st.sidebar.radio(
     "Navegación",
@@ -1057,7 +1022,7 @@ if st.session_state.menu_seleccion == "🏠 Portada Principal":
   mostrar_portada()
 elif st.session_state.menu_seleccion == "📦 Cubicadora WMS":
   mostrar_cubicadora()
-elif st.session_state.menu_seleccion == "🏗️ Layout de Bodega":
+elif st.session_state.menu_seleccion == "🏗️️ Layout de Bodega":
   mostrar_layout()
 elif st.session_state.menu_seleccion == "📊 Analytics & Reportería":
   mostrar_analytics()
