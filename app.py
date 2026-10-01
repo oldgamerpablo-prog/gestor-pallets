@@ -1508,7 +1508,7 @@ def generar_layout_3d(
   return fig_3d
 
 
-# --- OPCIÓN 2: NUEVO MOTOR 3D THREE.JS / WEBGL COMPLETO (HD REFINADO) ---
+# --- OPCIÓN 2: NUEVO MOTOR 3D THREE.JS / WEBGL COMPLETO (HD REFINADO SIN ERRORES) ---
 def generar_layout_3d_threejs(
     res, l_m, a_m, alt_m, is_vertical, skus_buscados, puertas, modo_vista
 ):
@@ -1552,14 +1552,14 @@ def generar_layout_3d_threejs(
 
   json_data = json.dumps(datos_bodega)
 
-  html_threejs = f"""
+  html_template = """
     <!DOCTYPE html>
     <html>
     <head>
         <style>
-            body {{ margin: 0; overflow: hidden; background-color: #0f172a; font-family: system-ui, -apple-system, sans-serif; }}
-            #canvas-container {{ width: 100vw; height: 730px; }}
-            #info-overlay {{ position: absolute; top: 15px; left: 15px; color: white; background: rgba(15, 23, 42, 0.88); padding: 12px 18px; border-radius: 8px; border: 1px solid #334155; font-size: 13px; pointer-events: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }}
+            body { margin: 0; overflow: hidden; background-color: #0f172a; font-family: system-ui, -apple-system, sans-serif; }
+            #canvas-container { width: 100vw; height: 730px; }
+            #info-overlay { position: absolute; top: 15px; left: 15px; color: white; background: rgba(15, 23, 42, 0.88); padding: 12px 18px; border-radius: 8px; border: 1px solid #334155; font-size: 13px; pointer-events: none; z-index: 100; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
         </style>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -1573,8 +1573,8 @@ def generar_layout_3d_threejs(
         <div id="canvas-container"></div>
 
         <script>
-            const data = {json_data};
-            const modoVista = "{modo_vista}";
+            const data = __DATOS_JSON__;
+            const modoVista = "__MODO_VISTA__";
             
             const container = document.getElementById('canvas-container');
             const scene = new THREE.Scene();
@@ -1584,7 +1584,7 @@ def generar_layout_3d_threejs(
             const camera = new THREE.PerspectiveCamera(45, window.innerWidth / 730, 0.5, 1000);
             camera.position.set(data.largo * 1.3, data.alto * 2.8, data.ancho * 1.5);
 
-            const renderer = new THREE.WebGLRenderer({{ antialias: true }});
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, 730);
             renderer.shadowMap.enabled = true;
             renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -1607,7 +1607,7 @@ def generar_layout_3d_threejs(
 
             // 2. SUELO Y LÍMITES
             const floorGeo = new THREE.PlaneGeometry(data.largo + 20, data.ancho + 20);
-            const floorMat = new THREE.MeshStandardMaterial({{ color: 0x1e293b, roughness: 0.4, metalness: 0.2 }});
+            const floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4, metalness: 0.2 });
             const floor = new THREE.Mesh(floorGeo, floorMat);
             floor.rotation.x = -Math.PI / 2;
             floor.position.set(data.largo / 2, -0.02, data.ancho / 2);
@@ -1627,35 +1627,35 @@ def generar_layout_3d_threejs(
                 new THREE.Vector3(0, 0.05, 0)
             ];
             const lineGeo = new THREE.BufferGeometry().setFromPoints(linePoints);
-            const lineMat = new THREE.LineBasicMaterial({{ color: 0xeab308, linewidth: 3 }});
+            const lineMat = new THREE.LineBasicMaterial({ color: 0xeab308, linewidth: 3 });
             scene.add(new THREE.Line(lineGeo, lineMat));
 
             // 3. PILARES ESTRUCTURALES
-            const pilMat = new THREE.MeshStandardMaterial({{ color: 0xdc2626, roughness: 0.3 }});
-            data.pilares.forEach(p => {{
-                if (p[0] <= data.largo && p[1] <= data.ancho) {{
+            const pilMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.3 });
+            data.pilares.forEach(p => {
+                if (p[0] <= data.largo && p[1] <= data.ancho) {
                     const pilGeo = new THREE.BoxGeometry(0.5, data.alto, 0.5);
                     const mesh = new THREE.Mesh(pilGeo, pilMat);
                     mesh.position.set(p[0], data.alto/2, p[1]);
                     mesh.castShadow = true;
                     scene.add(mesh);
-                }}
-            }});
+                }
+            });
 
             // 4. OFICINAS
-            const offMat = new THREE.MeshStandardMaterial({{ color: 0x64748b, transparent: true, opacity: 0.75, roughness: 0.1, metalness: 0.5 }});
-            data.oficinas.forEach(o => {{
+            const offMat = new THREE.MeshStandardMaterial({ color: 0x64748b, transparent: true, opacity: 0.75, roughness: 0.1, metalness: 0.5 });
+            data.oficinas.forEach(o => {
                 const h = o.h || 3.5;
                 const geo = new THREE.BoxGeometry(o.w, h, o.d);
                 const mesh = new THREE.Mesh(geo, offMat);
                 mesh.position.set(o.x + o.w/2, h/2, o.y + o.d/2);
                 mesh.castShadow = true;
                 scene.add(mesh);
-            }});
+            });
 
             // 5. ZONAS STAGING
-            const stMat = new THREE.MeshBasicMaterial({{ color: 0xf59e0b, transparent: true, opacity: 0.35, side: THREE.DoubleSide }});
-            data.staging.forEach(s => {{
+            const stMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+            data.staging.forEach(s => {
                 const w = s.x2 - s.x1;
                 const d = s.y2 - s.y1;
                 const geo = new THREE.PlaneGeometry(w, d);
@@ -1663,34 +1663,34 @@ def generar_layout_3d_threejs(
                 mesh.rotation.x = -Math.PI / 2;
                 mesh.position.set(s.x1 + w/2, 0.03, s.y1 + d/2);
                 scene.add(mesh);
-            }});
+            });
 
             // 6. PUERTAS Y PORTONES
-            const doorMat = new THREE.MeshStandardMaterial({{ color: 0xf59e0b, roughness: 0.2 }});
-            data.puertas.forEach(p => {{
+            const doorMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.2 });
+            data.puertas.forEach(p => {
                 const w = p.w;
                 const h = 4.5;
                 let x0=0, y0=0, dx=0.3, dy=0.3;
-                if (p.pared === 'S') {{ x0 = p.pos + w/2; y0 = 0.15; dx = w; dy = 0.3; }}
-                else if (p.pared === 'N') {{ x0 = p.pos + w/2; y0 = data.ancho - 0.15; dx = w; dy = 0.3; }}
-                else if (p.pared === 'E') {{ x0 = data.largo - 0.15; y0 = p.pos + w/2; dx = 0.3; dy = w; }}
-                else if (p.pared === 'O') {{ x0 = 0.15; y0 = p.pos + w/2; dx = 0.3; dy = w; }}
+                if (p.pared === 'S') { x0 = p.pos + w/2; y0 = 0.15; dx = w; dy = 0.3; }
+                else if (p.pared === 'N') { x0 = p.pos + w/2; y0 = data.ancho - 0.15; dx = w; dy = 0.3; }
+                else if (p.pared === 'E') { x0 = data.largo - 0.15; y0 = p.pos + w/2; dx = 0.3; dy = w; }
+                else if (p.pared === 'O') { x0 = 0.15; y0 = p.pos + w/2; dx = 0.3; dy = w; }
 
                 const frameGeo = new THREE.BoxGeometry(dx, h, dy);
                 const frameMesh = new THREE.Mesh(frameGeo, doorMat);
                 frameMesh.position.set(x0, h/2, y0);
                 scene.add(frameMesh);
-            }});
+            });
 
             // 7. RACKS COMPLETOS (POSTES + VIGAS HORIZONTALES)
-            const rackPostMat = new THREE.MeshStandardMaterial({{ color: 0x0f172a, roughness: 0.3, metalness: 0.8 }});
-            const beamMat = new THREE.MeshStandardMaterial({{ color: 0xe67e22, roughness: 0.4, metalness: 0.6 }});
+            const rackPostMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.3, metalness: 0.8 });
+            const beamMat = new THREE.MeshStandardMaterial({ color: 0xe67e22, roughness: 0.4, metalness: 0.6 });
             
             const lm = data.l_modulo;
             const pd = data.pp_d;
             const hr = Math.max(data.niveles * data.alt_nivel_viga, data.alt_nivel_viga);
 
-            data.racks.forEach(r => {{
+            data.racks.forEach(r => {
                 const rx = r.x;
                 const ry = r.y;
                 const isV = data.is_vertical;
@@ -1705,17 +1705,17 @@ def generar_layout_3d_threejs(
                     [rx, ry + pd - 0.08], [rx + lm - 0.08, ry + pd - 0.08]
                 ];
 
-                coords.forEach(pt => {{
+                coords.forEach(pt => {
                     const post = new THREE.Mesh(postGeo, rackPostMat);
                     post.position.set(pt[0] + 0.04, hr / 2, pt[1] + 0.04);
                     post.castShadow = true;
                     scene.add(post);
-                }});
+                });
 
                 // Vigas Horizontales Naranjas en cada nivel
-                for (let n = 1; n <= data.niveles; n++) {{
+                for (let n = 1; n <= data.niveles; n++) {
                     const zv = n * data.alt_nivel_viga - data.viga_h;
-                    if (!isV) {{
+                    if (!isV) {
                         const beamGeo = new THREE.BoxGeometry(lm - 0.16, data.viga_h, 0.05);
                         const b1 = new THREE.Mesh(beamGeo, beamMat);
                         b1.position.set(rx + lm / 2, zv, ry + 0.025);
@@ -1724,7 +1724,7 @@ def generar_layout_3d_threejs(
                         const b2 = new THREE.Mesh(beamGeo, beamMat);
                         b2.position.set(rx + lm / 2, zv, ry + pd - 0.025);
                         scene.add(b2);
-                    }} else {{
+                    } else {
                         const beamGeo = new THREE.BoxGeometry(0.05, data.viga_h, lm - 0.16);
                         const b1 = new THREE.Mesh(beamGeo, beamMat);
                         b1.position.set(ry + 0.025, zv, rx + lm / 2);
@@ -1733,25 +1733,25 @@ def generar_layout_3d_threejs(
                         const b2 = new THREE.Mesh(beamGeo, beamMat);
                         b2.position.set(ry + pd - 0.025, zv, rx + lm / 2);
                         scene.add(b2);
-                    }}
-                }}
-            }});
+                    }
+                }
+            });
 
             // 8. PALLETS BASE Y CARGAS
-            const palletBaseMat = new THREE.MeshStandardMaterial({{ color: 0xb88252, roughness: 0.8 }});
-            const colMapABC = {{ 'A': 0xef4444, 'B': 0xf59e0b, 'C': 0x3b82f6 }};
-            const colMapXYZ = {{
+            const palletBaseMat = new THREE.MeshStandardMaterial({ color: 0xb88252, roughness: 0.8 });
+            const colMapABC = { 'A': 0xef4444, 'B': 0xf59e0b, 'C': 0x3b82f6 };
+            const colMapXYZ = {
                 'AX': 0x900C3F, 'AY': 0xC70039, 'AZ': 0xFF5733,
                 'BX': 0xE67E22, 'BY': 0xF39C12, 'BZ': 0xF1C40F,
                 'CX': 0x2E86C1, 'CY': 0x3498DB, 'CZ': 0x85C1E9
-            }};
+            };
 
-            data.slots.forEach(s => {{
-                if (s.ocupado) {{
+            data.slots.forEach(s => {
+                if (s.ocupado) {
                     let colHex = colMapABC[s.abc] || 0x3b82f6;
-                    if (modoVista === '9 Zonas (ABC-XYZ)') {{
+                    if (modoVista === '9 Zonas (ABC-XYZ)') {
                         colHex = colMapXYZ[s.abc_xyz] || colHex;
-                    }}
+                    }
 
                     const isV = data.is_vertical;
                     const px = isV ? s.y + 0.05 : s.x;
@@ -1769,38 +1769,41 @@ def generar_layout_3d_threejs(
 
                     // Carga (Caja / Cilindro)
                     const h = Math.max(0.3, s.alt_p - 0.12);
-                    const cargoMat = new THREE.MeshStandardMaterial({{ color: colHex, roughness: 0.5 }});
+                    const cargoMat = new THREE.MeshStandardMaterial({ color: colHex, roughness: 0.5 });
                     let cargoMesh;
 
-                    if (s.es_cilindro) {{
+                    if (s.es_cilindro) {
                         const radius = Math.min(pW, pD) / 2.2;
                         const cylGeo = new THREE.CylinderGeometry(radius, radius, h, 16);
                         cargoMesh = new THREE.Mesh(cylGeo, cargoMat);
                         cargoMesh.position.set(px + pW/2, s.z + 0.12 + h/2, py + pD/2);
-                    }} else {{
+                    } else {
                         const boxGeo = new THREE.BoxGeometry(pW - 0.05, h, pD - 0.05);
                         cargoMesh = new THREE.Mesh(boxGeo, cargoMat);
                         cargoMesh.position.set(px + pW/2, s.z + 0.12 + h/2, py + pD/2);
-                    }}
+                    }
 
                     cargoMesh.castShadow = true;
                     cargoMesh.receiveShadow = true;
                     scene.add(cargoMesh);
-                }}
-            }});
+                }
+            });
 
-            function animate() {{
+            function animate() {
                 requestAnimationFrame(animate);
                 controls.update();
                 renderer.render(scene, camera);
-            }}
+            }
             animate();
         </script>
     </body>
     </html>
     """
 
-  components.html(html_threejs, height=740)
+  html_final = html_template.replace("__DATOS_JSON__", json_data).replace(
+      "__MODO_VISTA__", modo_vista
+  )
+  components.html(html_final, height=740)
 
 
 def mostrar_analytics():
