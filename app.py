@@ -21,16 +21,14 @@ MAX_PESO_PALLET = 1200
 PESO_MADERA_PALLET = 25
 
 if "menu_seleccion" not in st.session_state: st.session_state.menu_seleccion = "🏠 Portada Principal"
+if "tipo_stock" not in st.session_state: st.session_state.tipo_stock = "Stock Promedio"
 if "skus_activos" not in st.session_state: st.session_state.skus_activos = []
 if "skus_invalidos" not in st.session_state: st.session_state.skus_invalidos = []
 if "df_original" not in st.session_state: st.session_state.df_original = None
 if "df_resultados" not in st.session_state: st.session_state.df_resultados = None
 if "mapa_columnas" not in st.session_state: st.session_state.mapa_columnas = None
-
-if "historial_inbound" not in st.session_state: 
-    st.session_state.historial_inbound = pd.DataFrame(columns=["Fecha", "Proveedor", "SKU", "Unidades", "Pallets_Generados", "Ubicacion_Sugerida", "Estado"])
-if "ordenes_picking" not in st.session_state: 
-    st.session_state.ordenes_picking = []
+if "historial_inbound" not in st.session_state: st.session_state.historial_inbound = pd.DataFrame(columns=["Fecha", "Proveedor", "SKU", "Unidades", "Pallets_Generados", "Ubicacion_Sugerida", "Estado"])
+if "ordenes_picking" not in st.session_state: st.session_state.ordenes_picking = []
 
 parametros_layout = {
     "l_bod": 50.0, "a_bod": 40.0, "alt_bod": 7.0, "cant_pilares_x": 4, "cant_pilares_y": 1,
@@ -84,10 +82,14 @@ def procesar_datos(df_original):
     normalizados = {c: norm_txt(c) for c in cols}
     mapa = {}
     mapa["sku"] = encontrar_columna(cols, ["codigo", "producto"]) or encontrar_columna(cols, ["sku"]) or encontrar_columna(cols, ["codigo"])
-    mapa["stock"] = encontrar_columna(cols, ["stock", "promedio"])
+    
+    # NUEVA LÓGICA DE MAPEO PARA STOCK PROMEDIO Y MÁXIMO
+    mapa["stock_promedio"] = encontrar_columna(cols, ["stock", "promedio"]) or encontrar_columna(cols, ["promedio"]) or encontrar_columna(cols, ["stock"])
+    mapa["stock_maximo"] = encontrar_columna(cols, ["stock", "maximo"]) or encontrar_columna(cols, ["maximo"]) or mapa["stock_promedio"]
+    mapa["stock"] = mapa["stock_promedio"] # Legado por seguridad
+    
     mapa["peso"] = encontrar_columna(cols, ["peso"], ["total", "pallet"])
     mapa["formato"] = encontrar_columna(cols, ["formato", "principal"])
-    
     largos = [c for c in cols if "largo" in normalizados[c] and "pallet" not in normalizados[c]]
     anchos = [c for c in cols if "ancho" in normalizados[c] and "pallet" not in normalizados[c]]
     altos = [c for c in cols if "alto" in normalizados[c] and "pallet" not in normalizados[c] and "altura" not in normalizados[c]]
@@ -100,17 +102,17 @@ def procesar_datos(df_original):
     mapa["altura_pallet"] = encontrar_columna(cols, ["altura", "pallet"], ["total", "paletizada"]) or me_lp or me_ap
     mapa["unidades_pallet"] = encontrar_columna(cols, ["unidades", "pallet"])
     mapa["altura_total"] = encontrar_columna(cols, ["altura", "total", "pallet"]) or me_lp or encontrar_columna(cols, ["altura", "paletizada"])
-    
     mapa["abc"] = encontrar_columna(cols, ["abc"], ["xyz"])
     mapa["xyz"] = encontrar_columna(cols, ["xyz"], ["abc"])
     mapa["abc_xyz"] = encontrar_columna(cols, ["abc", "xyz"])
     mapa["familia"], mapa["bodega"], mapa["ranking"] = encontrar_columna(cols, ["familia"]), encontrar_columna(cols, ["bodega"]), encontrar_columna(cols, ["ranking"])
-
     df_trabajo = df_original.copy()
-    
     if "Pallets_Totales_Optimo" in df_trabajo.columns:
         mapa["is_opt_report"] = True
         mapa["stock"] = "Stock" if "Stock" in df_trabajo.columns else mapa.get("stock")
+        mapa["stock_promedio"] = "Stock_Promedio" if "Stock_Promedio" in df_trabajo.columns else mapa.get("stock")
+        mapa["stock_maximo"] = "Stock_Maximo" if "Stock_Maximo" in df_trabajo.columns else mapa.get("stock")
+        
         mapa["formato"] = "Formato" if "Formato" in df_trabajo.columns else mapa.get("formato")
         mapa["abc"] = "Clasificacion_ABC" if "Clasificacion_ABC" in df_trabajo.columns else mapa.get("abc")
         mapa["xyz"] = "Clasificacion_XYZ" if "Clasificacion_XYZ" in df_trabajo.columns else mapa.get("xyz")
@@ -118,7 +120,6 @@ def procesar_datos(df_original):
         mapa["familia"] = "Familia" if "Familia" in df_trabajo.columns else mapa.get("familia")
         mapa["bodega"] = "Bodega" if "Bodega" in df_trabajo.columns else mapa.get("bodega")
         mapa["ranking"] = "Ranking" if "Ranking" in df_trabajo.columns else mapa.get("ranking")
-        
         df_trabajo[mapa["sku"]] = df_trabajo[mapa["sku"]].astype(str).str.strip()
         if mapa.get("abc"): df_trabajo[mapa["abc"]] = df_trabajo[mapa["abc"]].fillna("C").astype(str).str.strip().str.upper()
         if mapa.get("xyz"): df_trabajo[mapa["xyz"]] = df_trabajo[mapa["xyz"]].fillna("Z").astype(str).str.strip().str.upper()
@@ -163,17 +164,34 @@ def precalcular_fila(fila, mapa):
     return pd.Series({"Capacidad_Excel": cap_base, "Capacidad_Optima": int(u_niv * niv_opt), "Unidades_Por_Nivel": u_niv, "Niveles_Optimos": niv_opt})
 
 def calcular_metricas_dinamicas(fila, mapa, modo="EXCEL"):
+    escenario_stock = st.session_state.get("tipo_stock", "Stock Promedio")
+    key_stock = "stock_maximo" if escenario_stock == "Stock Máximo" else "stock_promedio"
+    
     if mapa.get("is_opt_report"):
-        if modo == "OPTIMO":
-            cap_usada, pallets, pallets_comp, u_sob, peso_pal, efi_vol, estado = a_float(fila.get("Capacidad_Optima"), 0), a_float(fila.get("Pallets_Totales_Optimo"), 0), a_float(fila.get("Pallets_Completos_Optimo"), 0), a_float(fila.get("Unidades_Sobrante_Optimo"), 0), a_float(fila.get("Peso_Pallet_Optimo_kg"), np.nan), a_float(fila.get("Eficiencia_Vol_Optimo_%"), np.nan), str(fila.get("Estado_Optimo", "OK"))
-        else:
-            cap_usada, pallets, pallets_comp, u_sob, peso_pal, efi_vol, estado = a_float(fila.get("Capacidad_Excel"), 0), a_float(fila.get("Pallets_Totales_Excel"), 0), a_float(fila.get("Pallets_Completos_Excel"), 0), a_float(fila.get("Unidades_Sobrante_Excel"), 0), a_float(fila.get("Peso_Pallet_Excel_kg"), np.nan), a_float(fila.get("Eficiencia_Vol_Excel_%"), np.nan), str(fila.get("Estado_Excel", "OK"))
+        # Detectar stock según selección
+        col_stock = mapa.get(key_stock, mapa.get("stock", "Stock"))
+        if col_stock not in fila.index: col_stock = mapa.get("stock", "Stock")
+        stock = a_float(fila.get(col_stock), 0)
         
-        ult_unids = u_sob if u_sob > 0 else cap_usada
+        if modo == "OPTIMO":
+            cap_usada, pallets_comp, efi_vol, estado = a_float(fila.get("Capacidad_Optima"), 0), a_float(fila.get("Pallets_Completos_Optimo"), 0), a_float(fila.get("Eficiencia_Vol_Optimo_%"), np.nan), str(fila.get("Estado_Optimo", "OK"))
+        else:
+            cap_usada, pallets_comp, efi_vol, estado = a_float(fila.get("Capacidad_Excel"), 0), a_float(fila.get("Pallets_Completos_Excel"), 0), a_float(fila.get("Eficiencia_Vol_Excel_%"), np.nan), str(fila.get("Estado_Excel", "OK"))
+        
+        # Recalcular todo en vivo para que el Layout se actualice según el stock seleccionado
+        pallets = int(math.ceil(stock / cap_usada)) if stock > 0 and cap_usada > 0 else 0
+        ult_unids = (stock - (pallets - 1) * cap_usada) if pallets > 0 else 0
+        if ult_unids == 0 and stock > 0: ult_unids = cap_usada
+        pallets_comp = pallets - 1 if pallets > 0 and ult_unids < cap_usada else pallets
+        u_sob = 0 if ult_unids == cap_usada else ult_unids
         ult_pct = (ult_unids / cap_usada * 100) if cap_usada > 0 else 0
-        return {"Capacidad_Usada": cap_usada, "Pallets": int(pallets), "Unidades_Ultimo": ult_unids, "Ocupacion_Ultimo": ult_pct, "Peso_Pallet": peso_pal, "Estado": estado, "Cap_Excel": a_float(fila.get("Capacidad_Excel"), 0), "Cap_Optima": a_float(fila.get("Capacidad_Optima"), 0), "Eficiencia_Volumen": efi_vol, "Pallets_Completos": int(pallets_comp), "Unidades_Sobrante": u_sob, "Stock": a_float(fila.get(mapa.get("stock", "Stock")), 0)}
+        peso_u = a_float(valor_col(fila, "peso", mapa))
+        peso_pal = (cap_usada * peso_u) + PESO_MADERA_PALLET if es_numero(peso_u) else np.nan
+        
+        return {"Capacidad_Usada": cap_usada, "Pallets": int(pallets), "Unidades_Ultimo": ult_unids, "Ocupacion_Ultimo": ult_pct, "Peso_Pallet": peso_pal, "Estado": estado, "Cap_Excel": a_float(fila.get("Capacidad_Excel"), 0), "Cap_Optima": a_float(fila.get("Capacidad_Optima"), 0), "Eficiencia_Volumen": efi_vol, "Pallets_Completos": int(pallets_comp), "Unidades_Sobrante": u_sob, "Stock": stock}
 
-    stock, cap_ex, cap_op = a_float(valor_col(fila, "stock", mapa), 0), a_float(fila.get("Capacidad_Excel"), 0), int(fila.get("Capacidad_Optima", 0))
+    stock = a_float(valor_col(fila, key_stock, mapa), 0)
+    cap_ex, cap_op = a_float(fila.get("Capacidad_Excel"), 0), int(fila.get("Capacidad_Optima", 0))
     peso_u, largo, ancho, alto = a_float(valor_col(fila, "peso", mapa)), a_float(valor_col(fila, "largo", mapa)), a_float(valor_col(fila, "ancho", mapa)), a_float(valor_col(fila, "alto", mapa))
     l_p, a_p, alt_p, alt_t = a_float(valor_col(fila, "largo_pallet", mapa), 120), a_float(valor_col(fila, "ancho_pallet", mapa), 120), a_float(valor_col(fila, "altura_pallet", mapa), 15), a_float(valor_col(fila, "altura_total", mapa))
     
@@ -469,7 +487,7 @@ def mostrar_portada():
 def mostrar_cubicadora():
     st.markdown(css_styles, unsafe_allow_html=True)
     st.title("📦 Cubicadora de Palletización Masiva")
-    archivo_subido = st.file_uploader("📂 Sube tu archivo Excel con la base de datos (Raw Data o Reporte Optimizado)", type=["xlsx"])
+    archivo_subido = st.file_uploader("📂 Sube tu archivo Excel con la base de datos", type=["xlsx"])
     if archivo_subido is not None:
         with st.spinner("Procesando base de datos..."):
             try: df_original = pd.read_excel(archivo_subido, sheet_name="Data Equipo 7")
@@ -515,8 +533,13 @@ def mostrar_cubicadora():
         if st.session_state.skus_activos: df_kpi = df_f[df_f[MAPA['sku']].astype(str).str.upper().isin(st.session_state.skus_activos)]
         else: df_kpi = df_f
 
+        escenario_stock = st.session_state.get("tipo_stock", "Stock Promedio")
+        key_stock_eval = "stock_maximo" if escenario_stock == "Stock Máximo" else "stock_promedio"
+        col_stock_val = MAPA.get(key_stock_eval, MAPA.get("stock", df_kpi.columns[0]))
+        if col_stock_val not in df_kpi.columns: col_stock_val = MAPA.get("stock", df_kpi.columns[0])
+
         tot_sku_kpi = len(df_kpi)
-        con_stock_kpi = int((pd.to_numeric(df_kpi[MAPA["stock"] if not MAPA.get('is_opt_report') else 'Stock'], errors="coerce").fillna(0) > 0).sum())
+        con_stock_kpi = int((pd.to_numeric(df_kpi[col_stock_val], errors="coerce").fillna(0) > 0).sum())
         tot_pallets_kpi = sum([calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"] for _, row in df_kpi.iterrows()])
         alertas_activas_kpi = sum(1 for _, row in df_kpi.iterrows() if "EXCEL" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "PELIGRO" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "REVISAR" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"])
 
@@ -531,7 +554,7 @@ def mostrar_cubicadora():
 
         k1, k2, k3, k4, k5 = st.columns(5)
         with k1: st.markdown(f"<div style='background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #3b82f6;border-radius:0 0 0 8px;padding:14px 16px;margin-bottom:20px;'><div style='font-size:10px;font-weight:800;color:#64748b;letter-spacing:0.5px;margin-bottom:4px;'>TOTAL SKU (FILTRADO)</div><div style='font-size:22px;font-weight:800;color:#0f172a;'>{tot_sku_kpi:,}</div></div>", unsafe_allow_html=True)
-        with k2: st.markdown(f"<div style='background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #10b981;padding:14px 16px;margin-bottom:20px;'><div style='font-size:10px;font-weight:800;color:#64748b;letter-spacing:0.5px;margin-bottom:4px;'>SKUs CON STOCK</div><div style='font-size:22px;font-weight:800;color:#0f172a;'>{con_stock_kpi:,}</div></div>", unsafe_allow_html=True)
+        with k2: st.markdown(f"<div style='background:#ffffff;border:1px solid #e2e8f0;border-left:4px solid #10b981;padding:14px 16px;margin-bottom:20px;'><div style='font-size:10px;font-weight:800;color:#64748b;letter-spacing:0.5px;margin-bottom:4px;'>SKUs CON {escenario_stock.upper()}</div><div style='font-size:22px;font-weight:800;color:#0f172a;'>{con_stock_kpi:,}</div></div>", unsafe_allow_html=True)
         with k3: st.markdown(f"<div style='background:#f5f3ff;border:1px solid #ddd6fe;border-left:4px solid #6366f1;padding:14px 16px;margin-bottom:20px;'><div style='font-size:10px;font-weight:800;color:#4338ca;letter-spacing:0.5px;margin-bottom:4px;'>PALLETS REQ.</div><div style='font-size:22px;font-weight:800;color:#4f46e5;'>{tot_pallets_kpi:,}</div></div>", unsafe_allow_html=True)
         with k4: st.markdown(f"<div style='background:#f5f3ff;border:1px solid #ddd6fe;border-left:4px solid #8b5cf6;padding:14px 16px;margin-bottom:20px;'><div style='font-size:10px;font-weight:800;color:#5b21b6;letter-spacing:0.5px;margin-bottom:4px;'>POSICIONES</div><div style='font-size:22px;font-weight:800;color:#7c3aed;'>{tot_pallets_kpi:,}</div></div>", unsafe_allow_html=True)
         with k5: st.markdown(f"<div style='background:#fef2f2;border:1px solid #fecaca;border-left:4px solid #ef4444;border-radius:0 0 8px 0;padding:14px 16px;margin-bottom:20px;'><div style='font-size:10px;font-weight:800;color:#991b1b;letter-spacing:0.5px;margin-bottom:4px;'>ALERTAS ACTIVAS</div><div style='font-size:22px;font-weight:800;color:{'#dc2626' if alertas_activas_kpi > 0 else '#10b981'};'>{alertas_activas_kpi:,}</div></div>", unsafe_allow_html=True)
@@ -571,7 +594,7 @@ def mostrar_cubicadora():
                             </div>
                             <div style="padding: 20px 25px 5px 25px;">
                                 <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin-bottom: 15px;">
-                                    <div class="kpi-box"><div class="kpi-title">Stock Prom.</div><div class="kpi-value">{fmt(m['Stock'], 1)}</div></div>
+                                    <div class="kpi-box"><div class="kpi-title">{escenario_stock}</div><div class="kpi-value">{fmt(m['Stock'], 1)}</div></div>
                                     <div class="kpi-box" style="background:#f0f9ff; border:1px solid #bae6fd;"><div class="kpi-title">Unid. Pallet</div><div class="kpi-value" style="color:#0284c7;">{fmt(cap, 0)}</div></div>
                                     <div class="kpi-box" style="background:#f0f9ff; border:1px solid #bae6fd;"><div class="kpi-title">Pallets Req.</div><div class="kpi-value" style="color:#0284c7;">{pallets}</div></div>
                                     <div class="kpi-box {'kpi-box-danger' if es_numero(peso_est) and peso_est > MAX_PESO_PALLET else ''}"><div class="kpi-title">Peso (Kg)</div><div class="kpi-value {'kpi-value-danger' if es_numero(peso_est) and peso_est > MAX_PESO_PALLET else ''}">{fmt(peso_est, 1)}</div></div>
@@ -1163,7 +1186,13 @@ def mostrar_analytics():
         return
 
     df_res, MAPA = st.session_state.df_resultados.copy(), st.session_state.mapa_columnas
-    df_res['Stock_Num'] = pd.to_numeric(df_res[MAPA['stock'] if not MAPA.get('is_opt_report') else 'Stock'], errors='coerce').fillna(0)
+    
+    escenario_stock = st.session_state.get("tipo_stock", "Stock Promedio")
+    key_stock_eval = "stock_maximo" if escenario_stock == "Stock Máximo" else "stock_promedio"
+    col_stock_val = MAPA.get(key_stock_eval, MAPA.get("stock", df_res.columns[0]))
+    if col_stock_val not in df_res.columns: col_stock_val = MAPA.get("stock", df_res.columns[0])
+    
+    df_res['Stock_Num'] = pd.to_numeric(df_res[col_stock_val], errors='coerce').fillna(0)
     
     metrics_excel = [calcular_metricas_dinamicas(row, MAPA, "EXCEL") for _, row in df_res.iterrows()]
     metrics_opt = [calcular_metricas_dinamicas(row, MAPA, "OPTIMO") for _, row in df_res.iterrows()]
@@ -1184,7 +1213,7 @@ def mostrar_analytics():
     pal_ub = st.session_state.kpi_layout_ubicados
     pct_oc = (pal_ub / cap_bod * 100) if cap_bod > 0 else 0.0
 
-    st.markdown("### 📈 Indicadores Macro de Almacenamiento")
+    st.markdown(f"### 📈 Indicadores Macro de Almacenamiento ({escenario_stock})")
     m1, m2, m3, m4, m5 = st.columns(5)
     m1.metric("📦 Volumen Carga", f"{vol_tot:,.1f} m³" if vol_tot > 0 else "N/D")
     m2.metric("🏗️ Pallets Excel", f"{tot_pal_ex:,} pal")
@@ -1251,7 +1280,12 @@ def mostrar_inbound():
         pallets_gen = int(math.ceil(cant_in / cap_optima))
         es_crossdock = False
         
-        stock_actual = float(fila_sku.get(mapa.get("stock", "Stock"), 0))
+        # Evaluar stock según el escenario actual
+        escenario = st.session_state.get("tipo_stock", "Stock Promedio")
+        key_stock = "stock_maximo" if escenario == "Stock Máximo" else "stock_promedio"
+        col_stock = mapa.get(key_stock, mapa.get("stock", "Stock"))
+        
+        stock_actual = float(fila_sku.get(col_stock, 0))
         if stock_actual <= 0: es_crossdock = True
 
         st.markdown("---")
@@ -1355,10 +1389,22 @@ menu_opciones = [
     "📤 Salida Mercadería",
 ]
 
+# Seguro Anti-Errores
 if st.session_state.menu_seleccion not in menu_opciones:
     st.session_state.menu_seleccion = menu_opciones[0]
 
+# ============================================================
+# SIDEBAR GLOBAL (Aplica a todas las pestañas)
+# ============================================================
 st.session_state.menu_seleccion = st.sidebar.radio("Navegación", menu_opciones, index=menu_opciones.index(st.session_state.menu_seleccion))
+
+st.sidebar.markdown("---")
+st.session_state.tipo_stock = st.sidebar.radio(
+    "📊 Escenario de Stock a evaluar:",
+    ["Stock Promedio", "Stock Máximo"],
+    index=["Stock Promedio", "Stock Máximo"].index(st.session_state.get("tipo_stock", "Stock Promedio"))
+)
+
 st.sidebar.markdown("---")
 st.sidebar.caption("WMS Analytics Hub v8.9 • Dev Branch")
 
