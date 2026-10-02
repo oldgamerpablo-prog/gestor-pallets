@@ -55,6 +55,9 @@ if "kpi_layout_ubicados" not in st.session_state: st.session_state.kpi_layout_ub
 css_styles = "<style>.box-3d{transition:all 0.25s cubic-bezier(0.25,0.8,0.25,1);cursor:crosshair;}.box-3d:hover{transform:scale(1.08) translateY(-3px);box-shadow:0 10px 20px rgba(0,0,0,0.4)!important;z-index:100!important;filter:brightness(1.1);}.cota-linea,.cota-linea-v{position:absolute;display:flex;align-items:center;justify-content:center;font-size:10px;color:#475569;font-weight:bold;background-repeat:no-repeat;}.cota-linea{border-left:1px solid #64748b;border-right:1px solid #64748b;background-image:linear-gradient(#64748b,#64748b);background-size:100% 1px;background-position:center;}.cota-linea-v{border-top:1px solid #64748b;border-bottom:1px solid #64748b;background-image:linear-gradient(#64748b,#64748b);background-size:1px 100%;background-position:center;flex-direction:column;}.cota-texto{background:white;padding:2px 4px;border-radius:3px;z-index:2;}.kpi-box{background:#ffffff;border:1px solid #e2e8f0;padding:15px;border-radius:8px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.1);}.kpi-title{font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;}.kpi-value{font-size:24px;font-weight:700;color:#0f172a;}.kpi-box-danger{background:#fef2f2!important;border:1px solid #fecaca!important;}.kpi-value-danger{color:#dc2626!important;}</style>"
 color_styles = "<style>.hero-container-color{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0369a1 100%);border-radius:16px;padding:50px 30px;text-align:center;box-shadow:0 12px 30px rgba(15,23,42,0.25);margin-bottom:35px;}.hero-title-color{font-size:3.6rem;font-weight:900;color:#ffffff;letter-spacing:-1px;margin-bottom:14px;text-align:center;}.hero-subtitle-color{color:#e2e8f0;font-size:1.25rem;font-weight:400;max-width:850px;margin:0 auto;line-height:1.6;text-align:center;}.color-card{background:#ffffff;border-radius:14px;padding:25px;height:230px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 6px 18px rgba(0,0,0,0.05);transition:all 0.3s ease;margin-bottom:15px;border-top:5px solid #2563eb;}.color-card-green{border-top-color:#059669;}.color-card-purple{border-top-color:#7c3aed;}.color-card-amber{border-top-color:#d97706;}.color-card-rose{border-top-color:#e11d48;}.color-card:hover{box-shadow:0 12px 28px rgba(0,0,0,0.12);transform:translateY(-4px);}.card-icon-header{display:flex;align-items:center;justify-content:space-between;}.card-icon{font-size:2rem;}.card-tag-color{font-size:0.72rem;font-weight:800;padding:4px 12px;border-radius:20px;letter-spacing:0.5px;}.tag-blue{background:#dbeafe;color:#1e40af;}.tag-green{background:#d1fae5;color:#065f46;}.tag-purple{background:#ede9fe;color:#5b21b6;}.tag-soon{background:#f1f5f9;color:#64748b;}.color-card-title{color:#0f172a;font-size:1.25rem;font-weight:800;margin:10px 0 6px 0;}.color-card-desc{color:#475569;font-size:0.9rem;line-height:1.45;margin:0;}</style>"
 
+def clean_html(html_str):
+    return "\n".join(line.strip() for line in html_str.split("\n"))
+
 # ============================================================
 # 2. FUNCIONES CORE INTELIGENTES
 # ============================================================
@@ -553,7 +556,7 @@ def mostrar_cubicadora():
         if getattr(st.session_state, 'bodegas_sel', []):
             df_f = df_f[df_f[MAPA['bodega']].isin(st.session_state.bodegas_sel)]
             
-        col_m1, col_m2, col_m3 = st.columns(3)
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
         with col_m1: 
             modo = st.radio("⚙️ Modo de cálculo:", ["EXCEL", "OPTIMO"])
         with col_m2:
@@ -564,6 +567,14 @@ def mostrar_cubicadora():
             if MAPA.get('xyz'):
                 opc_xyz = sorted([str(x) for x in df_f[MAPA['xyz']].unique() if str(x) != 'nan'])
                 if opc_xyz: df_f = df_f[df_f[MAPA['xyz']].isin(st.multiselect("🔍 Filtro XYZ:", opc_xyz, default=opc_xyz))]
+        with col_m4:
+            if MAPA.get('bodega') and MAPA['bodega'] in df_f.columns:
+                opc_bod_cub = sorted([str(x) for x in df_f[MAPA['bodega']].unique() if pd.notna(x) and str(x) != 'nan' and str(x) != 'N/D'])
+                if opc_bod_cub:
+                    bod_def = [b for b in st.session_state.get("bodegas_sel", opc_bod_cub) if b in opc_bod_cub] or opc_bod_cub
+                    bod_cub_sel = st.multiselect("🏭 Filtro Bodega:", opc_bod_cub, default=bod_def, key="ms_bodega_cub_page")
+                    df_f = df_f[df_f[MAPA['bodega']].isin(bod_cub_sel)]
+                    st.session_state.bodegas_sel = bod_cub_sel
 
         st.markdown("<h3 style='color:#0f172a; font-weight:800; font-size:18px; margin-top:20px;'>🔍 Buscador Masivo y Panel de Cálculo</h3>", unsafe_allow_html=True)
         lista_skus_all = df_f[MAPA["sku"]].astype(str).str.upper().unique().tolist()
@@ -643,7 +654,7 @@ def mostrar_cubicadora():
                         bg_estado = "#fef2f2" if "PELIGRO" in estado or "EXCEL" in estado else "#fffbeb" if "REVISAR" in estado else "#ecfdf5"
                         border_estado = "#fecaca" if "PELIGRO" in estado or "EXCEL" in estado else "#fde68a" if "REVISAR" in estado else "#a7f3d0"
 
-                        html_header = f"""<div style="font-family: 'Segoe UI', system-ui, sans-serif; width: 100%; background: #ffffff; border: 1px solid #e2e8f0; border-bottom:none; border-radius: 12px 12px 0 0; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; box-sizing: border-box;">
+                        html_header = clean_html(f"""<div style="font-family: 'Segoe UI', system-ui, sans-serif; width: 100%; background: #ffffff; border: 1px solid #e2e8f0; border-bottom:none; border-radius: 12px 12px 0 0; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; box-sizing: border-box;">
 <div style="background: #0f172a; padding: 20px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid {color_estado};">
 <div><div style="color: #94a3b8; font-size: 11px; font-weight: 800; letter-spacing: 1px;">ANÁLISIS DE ESTIBA</div><div style="color: #ffffff; font-size: 26px; font-weight: 900; margin: 4px 0;">{sku}</div><div style="color: #cbd5e1; font-size: 13px;">Formato: <span style="color: #fff; font-weight:600;">{formato}</span> &nbsp;|&nbsp; Familia: <span style="color: #fff; font-weight:600;">{fam}</span> &nbsp;|&nbsp; Bodega: <span style="color: #38bdf8; font-weight:700;">{bodega}</span></div></div>
 <div style="background: {bg_estado}; border: 1px solid {border_estado}; padding: 10px 18px; border-radius: 6px; text-align: right;"><div style="color: {color_estado}; font-size: 10px; font-weight: 900;">DIAGNÓSTICO</div><div style="color: {color_estado}; font-size: 15px; font-weight: 900;">{estado}</div></div>
@@ -657,15 +668,15 @@ def mostrar_cubicadora():
 <div class="kpi-box"><div class="kpi-title">Volumen %</div><div class="kpi-value">{fmt(efi_vol, 1)}%</div></div>
 </div>
 </div>
-</div>"""
-                        html_datos_base = f"""<div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 0 12px; padding: 20px; font-family: system-ui; height: 100%; box-sizing: border-box;">
+</div>""")
+                        html_datos_base = clean_html(f"""<div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 0 12px; padding: 20px; font-family: system-ui; height: 100%; box-sizing: border-box;">
 <h4 style="margin:0 0 10px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">📋 Datos Base</h4>
 <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="font-weight:600;">Largo:</span><span>{fmt(a_float(valor_col(fila, 'largo', MAPA)),1)} cm</span><span style="font-weight:600;">Ancho:</span><span>{fmt(a_float(valor_col(fila, 'ancho', MAPA)),1)} cm</span><span style="font-weight:600;">Alto:</span><span>{fmt(a_float(valor_col(fila, 'alto', MAPA)),1)} cm</span><span style="font-weight:600;">Peso:</span><span>{fmt(a_float(valor_col(fila, 'peso', MAPA)),2)} kg</span></div>
 <h4 style="margin:16px 0 8px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">🏷️ Perfil Logístico</h4>
 <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="font-weight:600;">Ranking:</span><span>#{fmt(rank,0) if es_numero(rank) else rank}</span><span style="font-weight:600;">Matriz ABC-XYZ:</span><span style="font-weight:bold; color:#0284c7;">{abc_xyz}</span><span style="font-weight:600;">Zonificación:</span><span style="font-weight:bold; color:#0f766e;">{bodega}</span></div>
 <h4 style="margin:16px 0 8px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">⚙️ Resultados</h4>
 <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="color:#ef4444; font-weight:bold;">Excel (Manual):</span><span style="color:#ef4444; font-weight:bold;">{fmt(cap_excel,0)} u</span><span style="color:#10b981; font-weight:bold;">Óptimo Física:</span><span style="color:#10b981; font-weight:bold;">{fmt(cap_optima,0)} u</span><span style="font-weight:600;">Últ. Pallet:</span><span>{fmt(ult_pct,1)}% ({fmt(ult_unids,1)}u)</span></div>
-</div>"""
+</div>""")
                         st.markdown(html_header, unsafe_allow_html=True)
                         
                         col_izq, col_der = st.columns([1, 3])
@@ -744,6 +755,15 @@ def mostrar_layout():
         with cb_b: st.session_state.chk_b = st.checkbox('Zona B', value=st.session_state.chk_b)
         with cb_c: st.session_state.chk_c = st.checkbox('Zona C', value=st.session_state.chk_c)
         st.markdown("<b style='font-size:10px; color:#34495e; margin-top:5px; display:block;'>CONTROLES DE EVALUACIÓN:</b>", unsafe_allow_html=True)
+        
+        # Filtro Bodega en Layout Panel 4
+        df_fuente_curr = dict_demanda[st.session_state.fuente_datos]
+        if 'Bodega' in df_fuente_curr.columns:
+            opc_bod_lay = sorted([str(x) for x in df_fuente_curr['Bodega'].unique() if pd.notna(x) and str(x) != 'nan' and str(x) != 'N/D'])
+            if opc_bod_lay:
+                bod_default_lay = [b for b in st.session_state.get('bodegas_sel', opc_bod_lay) if b in opc_bod_lay] or opc_bod_lay
+                bod_lay_sel = st.multiselect("🏭 Filtrar por Bodega:", opc_bod_lay, default=bod_default_lay, key="ms_bodega_layout_page")
+                st.session_state.bodegas_sel = bod_lay_sel
         
         st.session_state.racks_en_pared = st.toggle("🧱 ¿Primer rack pegado a la pared?", value=st.session_state.get('racks_en_pared', False))
         st.session_state.consolidar_saldos = st.toggle("🧩 Consolidar Saldos (Pallets Mixtos)", value=st.session_state.get('consolidar_saldos', False))
@@ -893,7 +913,8 @@ def mostrar_layout():
         s_bg, s_color = ("#ecfdf5", "#065f46") if dif >= 0 else ("#fef2f2", "#991b1b")
         msg_txt = f"✔️ ¡ÉXITO! Caben todos y sobran {dif:,}." if dif >= 0 else f"⚠️ ¡ALERTA! Te faltan {abs(dif):,} posiciones."
 
-        html_eval = f"""<div style='margin:15px auto; max-width:450px; border:2px solid {s_color}; border-radius:8px; background:{s_bg}; padding:12px; font-family:system-ui, sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
+        # FIX HTML CLEAN PRINTING
+        html_eval = clean_html(f"""<div style='margin:15px auto; max-width:450px; border:2px solid {s_color}; border-radius:8px; background:{s_bg}; padding:12px; font-family:system-ui, sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
 <div style='color:#0f172a; font-weight:900; font-size:13px; margin-bottom:4px; text-align:center; text-transform:uppercase;'>📊 Evaluación de Capacidad</div>
 <div style='color:#475569; font-size:11px; text-align:center; margin-bottom:8px;'>Zonas Evaluadas: <b>{','.join(clases_sel)}</b></div>
 <div style='color:{s_color}; font-weight:bold; font-size:12px; margin-bottom:12px; text-align:center; padding: 4px; background: rgba(255,255,255,0.5); border-radius:4px;'>{msg_txt}</div>
@@ -902,7 +923,7 @@ def mostrar_layout():
 <div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 4px; border-top:1px solid #cbd5e1; padding-top:6px;'><span><b>Capacidad Total Racks:</b></span><span style='font-weight:bold;'>{res_box['capacidad']:,} pal</span></div>
 <div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 4px;'><span><b>Pallets Almacenados (3D):</b></span><span style='font-weight:900; color:#0284c7;'>{res_box['pallets_ubicados_totales']:,} pal</span></div>
 <div style='display:flex; justify-content: space-between; font-size:12px; color:#334155;'><span><b>Demanda Solicitada:</b></span><span style='font-weight:bold;'>{res_box['demanda']:,} pal</span></div>
-</div>"""
+</div>""")
         st.markdown(html_eval, unsafe_allow_html=True)
 
     if st.session_state.layout_generado and st.session_state.res_layout_actual is not None:
