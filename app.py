@@ -353,7 +353,7 @@ def preparar_df_layout(df_base, mapa, modo):
     col_alto = mapa.get('altura_total') if mapa.get('altura_total') in df_base.columns else mapa.get('alto')
     df_l['Alto_m'] = pd.to_numeric(df_base[col_alto], errors='coerce').fillna(120) / 100.0 if col_alto and col_alto in df_base.columns else 1.2
     
-    # NUEVO: EXTRAER BODEGA PARA FILTROS
+    # EXTRAER BODEGA PARA FILTROS
     df_l['Bodega'] = df_base[mapa['bodega']].astype(str) if mapa.get('bodega') and mapa['bodega'] in df_base.columns else 'N/D'
     
     abc = df_base[mapa.get('abc')].fillna('C').astype(str).str.strip().str.upper() if mapa.get('abc') and mapa.get('abc') in df_base.columns else pd.Series('C', index=df_base.index)
@@ -375,8 +375,8 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     ap_w, pp_d, ap_h = 1.2, 1.2, float(df_activa['Alto_m'].max()) if not df_activa.empty else 1.2
     v_l, v_a = (a_m, l_m) if is_vertical else (l_m, a_m)
     t_m, a_n_v = 0.10, ap_h + 0.27
-    l_mod = (ap_w * pal_v) + (0.10 * (pal_v + 1)) + t_m
     niv = max(1, sum(1 for n in range(50) if n*a_n_v+ap_h+0.15 <= alt_m and n*a_n_v <= conf['alt_grua']))
+    l_mod = (ap_w * pal_v) + (0.10 * (pal_v + 1)) + t_m
     
     pegar_pared = conf.get('racks_en_pared', False)
     offset_y = 0.0 if pegar_pared else 2.0
