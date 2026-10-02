@@ -21,6 +21,7 @@ PESO_MADERA_PALLET = 25
 
 if "menu_seleccion" not in st.session_state: st.session_state.menu_seleccion = "🏠 Portada Principal"
 if "tipo_stock" not in st.session_state: st.session_state.tipo_stock = "Stock Promedio"
+if "bodegas_sel" not in st.session_state: st.session_state.bodegas_sel = []
 if "skus_activos" not in st.session_state: st.session_state.skus_activos = []
 if "skus_invalidos" not in st.session_state: st.session_state.skus_invalidos = []
 if "df_original" not in st.session_state: st.session_state.df_original = None
@@ -30,7 +31,6 @@ if "historial_inbound" not in st.session_state:
     st.session_state.historial_inbound = pd.DataFrame(columns=["Fecha", "Proveedor", "SKU", "Unidades", "Pallets_Generados", "Ubicacion_Sugerida", "Estado"])
 if "ordenes_picking" not in st.session_state: 
     st.session_state.ordenes_picking = []
-if "bodegas_sel_layout" not in st.session_state: st.session_state.bodegas_sel_layout = []
 
 parametros_layout = {
     "l_bod": 50.0, "a_bod": 40.0, "alt_bod": 7.0, "cant_pilares_x": 4, "cant_pilares_y": 1,
@@ -220,6 +220,7 @@ def calcular_metricas_dinamicas(fila, mapa, modo="EXCEL"):
 
     return {"Capacidad_Usada": cap_usada, "Pallets": pallets, "Unidades_Ultimo": ult_unids, "Ocupacion_Ultimo": (ult_unids / cap_usada * 100) if cap_usada > 0 else 0, "Peso_Pallet": peso_pal, "Estado": estado, "Cap_Excel": cap_ex, "Cap_Optima": cap_op, "Eficiencia_Volumen": efi_vol, "Pallets_Completos": pallets_comp, "Unidades_Sobrante": u_sob, "Stock": stock}
 
+# REPORTE DE 3 HOJAS EN CUBICADORA
 def generar_excel_descarga(df_original, df_resultados, mapa):
     output = io.BytesIO()
     comparativo_rows = []
@@ -242,15 +243,36 @@ def generar_excel_descarga(df_original, df_resultados, mapa):
     output.seek(0)
     return output
 
+# REPORTE DE 3 HOJAS EN LAYOUT WMS
 def generar_wms_excel(df_base, almacen, mapa):
     pos = {}
+    slots_rows = []
     for s in almacen:
-        if s['ocupado']: pos.setdefault(str(s['sku']).upper(), []).append(s['id_posicion'])
+        if s['ocupado']: 
+            pos.setdefault(str(s['sku']).upper(), []).append(s['id_posicion'])
+        slots_rows.append({
+            "ID_Posicion": s['id_posicion'], "Pasillo": s['letra_pasillo'], "Modulo": s['modulo'],
+            "Nivel": s['nivel'], "Slot": s['slot'], "SKU": s.get('sku', 'VACIO'),
+            "Estado": "Ocupado" if s['ocupado'] else "Vacío", "Zona_ABC": s.get('abc', 'N/D'),
+            "Es_Mixto": "SI" if s.get('es_mixto') else "NO"
+        })
+        
     df_exp = df_base.copy()
     col_sku = mapa.get("sku", df_exp.columns[0])
     df_exp['Posiciones_Layout_WMS'] = df_exp[col_sku].apply(lambda x: ", ".join(pos.get(str(x).strip().upper(), ["Sin Ubicar"])))
+    
+    resumen_data = [{
+        "Total_Slots_Racks": len(almacen),
+        "Total_Slots_Ocupados": sum(1 for s in almacen if s['ocupado']),
+        "Total_Slots_Vacios": sum(1 for s in almacen if not s['ocupado']),
+        "Porcentaje_Ocupacion": f"{(sum(1 for s in almacen if s['ocupado'])/len(almacen)*100):.1f}%" if almacen else "0%"
+    }]
+    
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as w: df_exp.to_excel(w, sheet_name="Reporte_WMS", index=False)
+    with pd.ExcelWriter(output, engine='openpyxl') as w:
+        df_exp.to_excel(w, sheet_name="1_Asignacion_WMS", index=False)
+        pd.DataFrame(slots_rows).to_excel(w, sheet_name="2_Mapa_Malla_Slots", index=False)
+        pd.DataFrame(resumen_data).to_excel(w, sheet_name="3_Resumen_Capacidad", index=False)
     output.seek(0)
     return output
 
@@ -527,21 +549,21 @@ def mostrar_cubicadora():
         df_f = st.session_state.df_resultados.copy()
         MAPA = st.session_state.mapa_columnas
         
-        c_filt1, c_filt2, c_filt3, c_filt4 = st.columns(4)
-        with c_filt1: 
+        # FILTRO GLOBAL DE BODEGA
+        if getattr(st.session_state, 'bodegas_sel', []):
+            df_f = df_f[df_f[MAPA['bodega']].isin(st.session_state.bodegas_sel)]
+            
+        col_m1, col_m2, col_m3 = st.columns(3)
+        with col_m1: 
             modo = st.radio("⚙️ Modo de cálculo:", ["EXCEL", "OPTIMO"])
-        with c_filt2:
+        with col_m2:
             if MAPA.get('abc'):
                 opc_abc = sorted([str(x) for x in df_f[MAPA['abc']].unique() if str(x) != 'nan'])
                 if opc_abc: df_f = df_f[df_f[MAPA['abc']].isin(st.multiselect("🔍 Filtro ABC:", opc_abc, default=opc_abc))]
-        with c_filt3:
+        with col_m3:
             if MAPA.get('xyz'):
                 opc_xyz = sorted([str(x) for x in df_f[MAPA['xyz']].unique() if str(x) != 'nan'])
                 if opc_xyz: df_f = df_f[df_f[MAPA['xyz']].isin(st.multiselect("🔍 Filtro XYZ:", opc_xyz, default=opc_xyz))]
-        with c_filt4:
-            if MAPA.get('bodega'):
-                opc_bodega = sorted([str(x) for x in df_f[MAPA['bodega']].unique() if str(x) != 'nan' and str(x) != 'N/D'])
-                if opc_bodega: df_f = df_f[df_f[MAPA['bodega']].isin(st.multiselect("🏭 Filtro Bodega:", opc_bodega, default=opc_bodega))]
 
         st.markdown("<h3 style='color:#0f172a; font-weight:800; font-size:18px; margin-top:20px;'>🔍 Buscador Masivo y Panel de Cálculo</h3>", unsafe_allow_html=True)
         lista_skus_all = df_f[MAPA["sku"]].astype(str).str.upper().unique().tolist()
@@ -621,33 +643,29 @@ def mostrar_cubicadora():
                         bg_estado = "#fef2f2" if "PELIGRO" in estado or "EXCEL" in estado else "#fffbeb" if "REVISAR" in estado else "#ecfdf5"
                         border_estado = "#fecaca" if "PELIGRO" in estado or "EXCEL" in estado else "#fde68a" if "REVISAR" in estado else "#a7f3d0"
 
-                        html_header = f"""
-                        <div style="font-family: 'Segoe UI', system-ui, sans-serif; width: 100%; background: #ffffff; border: 1px solid #e2e8f0; border-bottom:none; border-radius: 12px 12px 0 0; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; box-sizing: border-box;">
-                            <div style="background: #0f172a; padding: 20px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid {color_estado};">
-                                <div><div style="color: #94a3b8; font-size: 11px; font-weight: 800; letter-spacing: 1px;">ANÁLISIS DE ESTIBA</div><div style="color: #ffffff; font-size: 26px; font-weight: 900; margin: 4px 0;">{sku}</div><div style="color: #cbd5e1; font-size: 13px;">Formato: <span style="color: #fff; font-weight:600;">{formato}</span> &nbsp;|&nbsp; Familia: <span style="color: #fff; font-weight:600;">{fam}</span> &nbsp;|&nbsp; Bodega: <span style="color: #38bdf8; font-weight:700;">{bodega}</span></div></div>
-                                <div style="background: {bg_estado}; border: 1px solid {border_estado}; padding: 10px 18px; border-radius: 6px; text-align: right;"><div style="color: {color_estado}; font-size: 10px; font-weight: 900;">DIAGNÓSTICO</div><div style="color: {color_estado}; font-size: 15px; font-weight: 900;">{estado}</div></div>
-                            </div>
-                            <div style="padding: 20px 25px 5px 25px;">
-                                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin-bottom: 15px;">
-                                    <div class="kpi-box"><div class="kpi-title">{escenario_stock}</div><div class="kpi-value">{fmt(m['Stock'], 1)}</div></div>
-                                    <div class="kpi-box" style="background:#f0f9ff; border:1px solid #bae6fd;"><div class="kpi-title">Unid. Pallet</div><div class="kpi-value" style="color:#0284c7;">{fmt(cap, 0)}</div></div>
-                                    <div class="kpi-box" style="background:#f0f9ff; border:1px solid #bae6fd;"><div class="kpi-title">Pallets Req.</div><div class="kpi-value" style="color:#0284c7;">{pallets}</div></div>
-                                    <div class="kpi-box {'kpi-box-danger' if es_numero(peso_est) and peso_est > MAX_PESO_PALLET else ''}"><div class="kpi-title">Peso (Kg)</div><div class="kpi-value {'kpi-value-danger' if es_numero(peso_est) and peso_est > MAX_PESO_PALLET else ''}">{fmt(peso_est, 1)}</div></div>
-                                    <div class="kpi-box"><div class="kpi-title">Volumen %</div><div class="kpi-value">{fmt(efi_vol, 1)}%</div></div>
-                                </div>
-                            </div>
-                        </div>
-                        """
-                        html_datos_base = f"""
-                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 0 12px; padding: 20px; font-family: system-ui; height: 100%; box-sizing: border-box;">
-                            <h4 style="margin:0 0 10px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">📋 Datos Base</h4>
-                            <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="font-weight:600;">Largo:</span><span>{fmt(a_float(valor_col(fila, 'largo', MAPA)),1)} cm</span><span style="font-weight:600;">Ancho:</span><span>{fmt(a_float(valor_col(fila, 'ancho', MAPA)),1)} cm</span><span style="font-weight:600;">Alto:</span><span>{fmt(a_float(valor_col(fila, 'alto', MAPA)),1)} cm</span><span style="font-weight:600;">Peso:</span><span>{fmt(a_float(valor_col(fila, 'peso', MAPA)),2)} kg</span></div>
-                            <h4 style="margin:16px 0 8px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">🏷️ Perfil Logístico</h4>
-                            <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="font-weight:600;">Ranking:</span><span>#{fmt(rank,0) if es_numero(rank) else rank}</span><span style="font-weight:600;">Matriz ABC-XYZ:</span><span style="font-weight:bold; color:#0284c7;">{abc_xyz}</span><span style="font-weight:600;">Zonificación:</span><span style="font-weight:bold; color:#0f766e;">{bodega}</span></div>
-                            <h4 style="margin:16px 0 8px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">⚙️ Resultados</h4>
-                            <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="color:#ef4444; font-weight:bold;">Excel (Manual):</span><span style="color:#ef4444; font-weight:bold;">{fmt(cap_excel,0)} u</span><span style="color:#10b981; font-weight:bold;">Óptimo Física:</span><span style="color:#10b981; font-weight:bold;">{fmt(cap_optima,0)} u</span><span style="font-weight:600;">Últ. Pallet:</span><span>{fmt(ult_pct,1)}% ({fmt(ult_unids,1)}u)</span></div>
-                        </div>
-                        """
+                        html_header = f"""<div style="font-family: 'Segoe UI', system-ui, sans-serif; width: 100%; background: #ffffff; border: 1px solid #e2e8f0; border-bottom:none; border-radius: 12px 12px 0 0; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; box-sizing: border-box;">
+<div style="background: #0f172a; padding: 20px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid {color_estado};">
+<div><div style="color: #94a3b8; font-size: 11px; font-weight: 800; letter-spacing: 1px;">ANÁLISIS DE ESTIBA</div><div style="color: #ffffff; font-size: 26px; font-weight: 900; margin: 4px 0;">{sku}</div><div style="color: #cbd5e1; font-size: 13px;">Formato: <span style="color: #fff; font-weight:600;">{formato}</span> &nbsp;|&nbsp; Familia: <span style="color: #fff; font-weight:600;">{fam}</span> &nbsp;|&nbsp; Bodega: <span style="color: #38bdf8; font-weight:700;">{bodega}</span></div></div>
+<div style="background: {bg_estado}; border: 1px solid {border_estado}; padding: 10px 18px; border-radius: 6px; text-align: right;"><div style="color: {color_estado}; font-size: 10px; font-weight: 900;">DIAGNÓSTICO</div><div style="color: {color_estado}; font-size: 15px; font-weight: 900;">{estado}</div></div>
+</div>
+<div style="padding: 20px 25px 5px 25px;">
+<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin-bottom: 15px;">
+<div class="kpi-box"><div class="kpi-title">{escenario_stock}</div><div class="kpi-value">{fmt(m['Stock'], 1)}</div></div>
+<div class="kpi-box" style="background:#f0f9ff; border:1px solid #bae6fd;"><div class="kpi-title">Unid. Pallet</div><div class="kpi-value" style="color:#0284c7;">{fmt(cap, 0)}</div></div>
+<div class="kpi-box" style="background:#f0f9ff; border:1px solid #bae6fd;"><div class="kpi-title">Pallets Req.</div><div class="kpi-value" style="color:#0284c7;">{pallets}</div></div>
+<div class="kpi-box {'kpi-box-danger' if es_numero(peso_est) and peso_est > MAX_PESO_PALLET else ''}"><div class="kpi-title">Peso (Kg)</div><div class="kpi-value {'kpi-value-danger' if es_numero(peso_est) and peso_est > MAX_PESO_PALLET else ''}">{fmt(peso_est, 1)}</div></div>
+<div class="kpi-box"><div class="kpi-title">Volumen %</div><div class="kpi-value">{fmt(efi_vol, 1)}%</div></div>
+</div>
+</div>
+</div>"""
+                        html_datos_base = f"""<div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 0 12px; padding: 20px; font-family: system-ui; height: 100%; box-sizing: border-box;">
+<h4 style="margin:0 0 10px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">📋 Datos Base</h4>
+<div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="font-weight:600;">Largo:</span><span>{fmt(a_float(valor_col(fila, 'largo', MAPA)),1)} cm</span><span style="font-weight:600;">Ancho:</span><span>{fmt(a_float(valor_col(fila, 'ancho', MAPA)),1)} cm</span><span style="font-weight:600;">Alto:</span><span>{fmt(a_float(valor_col(fila, 'alto', MAPA)),1)} cm</span><span style="font-weight:600;">Peso:</span><span>{fmt(a_float(valor_col(fila, 'peso', MAPA)),2)} kg</span></div>
+<h4 style="margin:16px 0 8px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">🏷️ Perfil Logístico</h4>
+<div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="font-weight:600;">Ranking:</span><span>#{fmt(rank,0) if es_numero(rank) else rank}</span><span style="font-weight:600;">Matriz ABC-XYZ:</span><span style="font-weight:bold; color:#0284c7;">{abc_xyz}</span><span style="font-weight:600;">Zonificación:</span><span style="font-weight:bold; color:#0f766e;">{bodega}</span></div>
+<h4 style="margin:16px 0 8px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">⚙️ Resultados</h4>
+<div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="color:#ef4444; font-weight:bold;">Excel (Manual):</span><span style="color:#ef4444; font-weight:bold;">{fmt(cap_excel,0)} u</span><span style="color:#10b981; font-weight:bold;">Óptimo Física:</span><span style="color:#10b981; font-weight:bold;">{fmt(cap_optima,0)} u</span><span style="font-weight:600;">Últ. Pallet:</span><span>{fmt(ult_pct,1)}% ({fmt(ult_unids,1)}u)</span></div>
+</div>"""
                         st.markdown(html_header, unsafe_allow_html=True)
                         
                         col_izq, col_der = st.columns([1, 3])
@@ -694,7 +712,7 @@ def mostrar_cubicadora():
 
         with tab_descargar:
             st.write(f"Genera un Excel completo con las **24 columnas WMS** de los **{len(df_f)} SKUs** actuales.")
-            st.download_button("📊 Descargar Reporte WMS Completo (Excel)", data=generar_excel_descarga(st.session_state.df_original, df_f, MAPA), file_name="Reporte_Paletizacion_Optimizado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            st.download_button("📊 Descargar Reporte WMS Completo (Excel 3 Hojas)", data=generar_excel_descarga(st.session_state.df_original, df_f, MAPA), file_name="Reporte_Paletizacion_Optimizado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         with tab_alertas:
             alertas = [{"SKU": row[MAPA["sku"]], "Estado": calcular_metricas_dinamicas(row, MAPA, modo)["Estado"], "Pallets": calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"]} for _, row in df_f.iterrows() if "EXCEL" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "PELIGRO" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "REVISAR" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"]]
             if alertas: st.warning(f"Se encontraron {len(alertas)} SKUs con alertas."); st.dataframe(pd.DataFrame(alertas), use_container_width=True)
@@ -726,15 +744,6 @@ def mostrar_layout():
         with cb_b: st.session_state.chk_b = st.checkbox('Zona B', value=st.session_state.chk_b)
         with cb_c: st.session_state.chk_c = st.checkbox('Zona C', value=st.session_state.chk_c)
         st.markdown("<b style='font-size:10px; color:#34495e; margin-top:5px; display:block;'>CONTROLES DE EVALUACIÓN:</b>", unsafe_allow_html=True)
-        
-        # Filtro Bodega en Layout
-        df_fuente_curr = dict_demanda[st.session_state.fuente_datos]
-        if 'Bodega' in df_fuente_curr.columns:
-            opc_bod_lay = sorted([str(x) for x in df_fuente_curr['Bodega'].unique() if str(x) != 'nan' and str(x) != 'N/D'])
-            if opc_bod_lay:
-                if not st.session_state.bodegas_sel_layout or not any(b in opc_bod_lay for b in st.session_state.bodegas_sel_layout):
-                    st.session_state.bodegas_sel_layout = opc_bod_lay
-                st.session_state.bodegas_sel_layout = st.multiselect("🏭 Filtrar por Bodega:", opc_bod_lay, default=st.session_state.bodegas_sel_layout)
         
         st.session_state.racks_en_pared = st.toggle("🧱 ¿Primer rack pegado a la pared?", value=st.session_state.get('racks_en_pared', False))
         st.session_state.consolidar_saldos = st.toggle("🧩 Consolidar Saldos (Pallets Mixtos)", value=st.session_state.get('consolidar_saldos', False))
@@ -796,8 +805,8 @@ def mostrar_layout():
         df_fuente_curr = df_fuente_curr[df_fuente_curr['ABC'].isin(clases_sel_box)]
         
         # Filtro de Bodega Visual
-        if getattr(st.session_state, 'bodegas_sel_layout', []):
-            df_fuente_curr = df_fuente_curr[df_fuente_curr['Bodega'].isin(st.session_state.bodegas_sel_layout)]
+        if getattr(st.session_state, 'bodegas_sel', []):
+            df_fuente_curr = df_fuente_curr[df_fuente_curr['Bodega'].isin(st.session_state.bodegas_sel)]
         
         raw_f_box = st.session_state.filtro_sublayout.strip()
         if raw_f_box and raw_f_box.upper() != 'TODOS':
@@ -839,8 +848,8 @@ def mostrar_layout():
             if st.session_state.chk_c: clases_sel.append('C')
             df_test_base = dict_demanda[st.session_state.fuente_datos]
             df_test_base = df_test_base[df_test_base['ABC'].isin(clases_sel)]
-            if getattr(st.session_state, 'bodegas_sel_layout', []):
-                df_test_base = df_test_base[df_test_base['Bodega'].isin(st.session_state.bodegas_sel_layout)]
+            if getattr(st.session_state, 'bodegas_sel', []):
+                df_test_base = df_test_base[df_test_base['Bodega'].isin(st.session_state.bodegas_sel)]
             raw_f = st.session_state.filtro_sublayout.strip()
             skus_f = set(s.strip().upper() for s in re.split(r'[,\s;]+', raw_f) if s.strip())
             if skus_f and raw_f.upper() != 'TODOS': df_test_base = df_test_base[df_test_base['SKU'].astype(str).str.upper().isin(skus_f)]
@@ -868,8 +877,8 @@ def mostrar_layout():
         
         df_activa = dict_demanda[st.session_state.fuente_datos]
         df_activa = df_activa[df_activa['ABC'].isin(clases_sel)]
-        if getattr(st.session_state, 'bodegas_sel_layout', []):
-            df_activa = df_activa[df_activa['Bodega'].isin(st.session_state.bodegas_sel_layout)]
+        if getattr(st.session_state, 'bodegas_sel', []):
+            df_activa = df_activa[df_activa['Bodega'].isin(st.session_state.bodegas_sel)]
         
         raw = st.session_state.filtro_sublayout.strip()
         if getattr(st.session_state, 'modo_layout_eval', 'todos') == 'filtro':
@@ -884,7 +893,6 @@ def mostrar_layout():
         s_bg, s_color = ("#ecfdf5", "#065f46") if dif >= 0 else ("#fef2f2", "#991b1b")
         msg_txt = f"✔️ ¡ÉXITO! Caben todos y sobran {dif:,}." if dif >= 0 else f"⚠️ ¡ALERTA! Te faltan {abs(dif):,} posiciones."
 
-        # FIX HTML PARSING ISSUE IN STREAMLIT MARKDOWN
         html_eval = f"""<div style='margin:15px auto; max-width:450px; border:2px solid {s_color}; border-radius:8px; background:{s_bg}; padding:12px; font-family:system-ui, sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
 <div style='color:#0f172a; font-weight:900; font-size:13px; margin-bottom:4px; text-align:center; text-transform:uppercase;'>📊 Evaluación de Capacidad</div>
 <div style='color:#475569; font-size:11px; text-align:center; margin-bottom:8px;'>Zonas Evaluadas: <b>{','.join(clases_sel)}</b></div>
@@ -905,7 +913,7 @@ def mostrar_layout():
         with col_exp1: st.session_state.modo_vista_color = st.selectbox("🎨 Zonificación de Colores Racks:", ['3 Zonas (ABC)', '9 Zonas (ABC-XYZ)'], index=['3 Zonas (ABC)', '9 Zonas (ABC-XYZ)'].index(st.session_state.modo_vista_color))
         with col_exp2:
             st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-            st.download_button("💾 Exportar Ubicaciones WMS (Excel)", data=generar_wms_excel(st.session_state.df_resultados, res['almacen'], st.session_state.mapa_columnas), file_name="WMS_Ubicaciones_Bodega.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            st.download_button("💾 Exportar Ubicaciones WMS (Excel 3 Hojas)", data=generar_wms_excel(st.session_state.df_resultados, res['almacen'], st.session_state.mapa_columnas), file_name="WMS_Ubicaciones_Bodega.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
         l_m, a_m, w_puerta, flujo = st.session_state.l_bod, st.session_state.a_bod, st.session_state.ancho_porton, st.session_state.tipo_flujo
         fig_2d = go.Figure()
@@ -1292,6 +1300,10 @@ def mostrar_analytics():
 
     df_res, MAPA = st.session_state.df_resultados.copy(), st.session_state.mapa_columnas
     
+    # Aplicar Filtro de Bodega Global
+    if getattr(st.session_state, 'bodegas_sel', []):
+        df_res = df_res[df_res[MAPA['bodega']].isin(st.session_state.bodegas_sel)]
+    
     escenario_stock = st.session_state.get("tipo_stock", "Stock Promedio")
     key_stock_eval = "stock_maximo" if escenario_stock == "Stock Máximo" else "stock_promedio"
     col_stock_val = MAPA.get(key_stock_eval, MAPA.get("stock", df_res.columns[0]))
@@ -1367,6 +1379,10 @@ def mostrar_inbound():
         
     df_res = st.session_state.df_resultados
     mapa = st.session_state.mapa_columnas
+    
+    if getattr(st.session_state, 'bodegas_sel', []):
+        df_res = df_res[df_res[mapa['bodega']].isin(st.session_state.bodegas_sel)]
+        
     skus_disponibles = df_res[mapa['sku']].astype(str).unique().tolist()
     
     col1, col2 = st.columns([1, 2])
@@ -1385,7 +1401,6 @@ def mostrar_inbound():
         pallets_gen = int(math.ceil(cant_in / cap_optima))
         es_crossdock = False
         
-        # Evaluar stock según el escenario actual
         escenario = st.session_state.get("tipo_stock", "Stock Promedio")
         key_stock = "stock_maximo" if escenario == "Stock Máximo" else "stock_promedio"
         col_stock = mapa.get(key_stock, mapa.get("stock", "Stock"))
@@ -1494,7 +1509,6 @@ menu_opciones = [
     "📤 Salida Mercadería",
 ]
 
-# Seguro Anti-Errores
 if st.session_state.menu_seleccion not in menu_opciones:
     st.session_state.menu_seleccion = menu_opciones[0]
 
@@ -1509,6 +1523,23 @@ st.session_state.tipo_stock = st.sidebar.radio(
     ["Stock Promedio", "Stock Máximo"],
     index=["Stock Promedio", "Stock Máximo"].index(st.session_state.get("tipo_stock", "Stock Promedio"))
 )
+
+st.sidebar.markdown("---")
+# FILTRO GLOBAL BODEGA EN SIDEBAR
+if st.session_state.df_resultados is not None:
+    mapa = st.session_state.mapa_columnas
+    df_all = st.session_state.df_resultados
+    col_bod = mapa.get('bodega') if mapa and mapa.get('bodega') else 'Bodega'
+    if col_bod in df_all.columns:
+        opciones_bodega = sorted([str(x) for x in df_all[col_bod].unique() if pd.notna(x) and str(x) != 'nan' and str(x) != 'N/D'])
+        if opciones_bodega:
+            if not st.session_state.get('bodegas_sel') or not any(b in opciones_bodega for b in st.session_state.bodegas_sel):
+                st.session_state.bodegas_sel = opciones_bodega
+            st.session_state.bodegas_sel = st.sidebar.multiselect(
+                "🏭 Filtrar por Bodega:",
+                options=opciones_bodega,
+                default=st.session_state.bodegas_sel
+            )
 
 st.sidebar.markdown("---")
 st.sidebar.caption("WMS Analytics Hub v8.9 • Dev Branch")
