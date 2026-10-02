@@ -4,7 +4,6 @@ import json
 import math
 import re
 import unicodedata
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -31,6 +30,7 @@ if "historial_inbound" not in st.session_state:
     st.session_state.historial_inbound = pd.DataFrame(columns=["Fecha", "Proveedor", "SKU", "Unidades", "Pallets_Generados", "Ubicacion_Sugerida", "Estado"])
 if "ordenes_picking" not in st.session_state: 
     st.session_state.ordenes_picking = []
+if "bodegas_sel_layout" not in st.session_state: st.session_state.bodegas_sel_layout = []
 
 parametros_layout = {
     "l_bod": 50.0, "a_bod": 40.0, "alt_bod": 7.0, "cant_pilares_x": 4, "cant_pilares_y": 1,
@@ -85,10 +85,9 @@ def procesar_datos(df_original):
     mapa = {}
     mapa["sku"] = encontrar_columna(cols, ["codigo", "producto"]) or encontrar_columna(cols, ["sku"]) or encontrar_columna(cols, ["codigo"])
     
-    # LÓGICA DE MAPEO PARA STOCK PROMEDIO Y MÁXIMO
     mapa["stock_promedio"] = encontrar_columna(cols, ["stock", "promedio"]) or encontrar_columna(cols, ["promedio"]) or encontrar_columna(cols, ["stock"])
     mapa["stock_maximo"] = encontrar_columna(cols, ["stock", "maximo"]) or encontrar_columna(cols, ["maximo"]) or mapa["stock_promedio"]
-    mapa["stock"] = mapa["stock_promedio"] # Legado por seguridad
+    mapa["stock"] = mapa["stock_promedio"]
     
     mapa["peso"] = encontrar_columna(cols, ["peso"], ["total", "pallet"])
     mapa["formato"] = encontrar_columna(cols, ["formato", "principal"])
@@ -108,7 +107,9 @@ def procesar_datos(df_original):
     mapa["abc"] = encontrar_columna(cols, ["abc"], ["xyz"])
     mapa["xyz"] = encontrar_columna(cols, ["xyz"], ["abc"])
     mapa["abc_xyz"] = encontrar_columna(cols, ["abc", "xyz"])
-    mapa["familia"], mapa["bodega"], mapa["ranking"] = encontrar_columna(cols, ["familia"]), encontrar_columna(cols, ["bodega"]), encontrar_columna(cols, ["ranking"])
+    mapa["familia"] = encontrar_columna(cols, ["familia"])
+    mapa["bodega"] = encontrar_columna(cols, ["bodega"])
+    mapa["ranking"] = encontrar_columna(cols, ["ranking"])
 
     df_trabajo = df_original.copy()
     
@@ -117,7 +118,6 @@ def procesar_datos(df_original):
         mapa["stock"] = "Stock" if "Stock" in df_trabajo.columns else mapa.get("stock")
         mapa["stock_promedio"] = "Stock_Promedio" if "Stock_Promedio" in df_trabajo.columns else mapa.get("stock")
         mapa["stock_maximo"] = "Stock_Maximo" if "Stock_Maximo" in df_trabajo.columns else mapa.get("stock")
-        
         mapa["formato"] = "Formato" if "Formato" in df_trabajo.columns else mapa.get("formato")
         mapa["abc"] = "Clasificacion_ABC" if "Clasificacion_ABC" in df_trabajo.columns else mapa.get("abc")
         mapa["xyz"] = "Clasificacion_XYZ" if "Clasificacion_XYZ" in df_trabajo.columns else mapa.get("xyz")
@@ -352,6 +352,10 @@ def preparar_df_layout(df_base, mapa, modo):
     df_l['Pallets_Completos_Optimo'], df_l['Unidades_Sobrante_Optimo'], df_l['Capacidad_Optima'] = [m['Pallets_Completos'] for m in metrics], [m['Unidades_Sobrante'] for m in metrics], [m['Cap_Optima'] for m in metrics]
     col_alto = mapa.get('altura_total') if mapa.get('altura_total') in df_base.columns else mapa.get('alto')
     df_l['Alto_m'] = pd.to_numeric(df_base[col_alto], errors='coerce').fillna(120) / 100.0 if col_alto and col_alto in df_base.columns else 1.2
+    
+    # NUEVO: EXTRAER BODEGA PARA FILTROS
+    df_l['Bodega'] = df_base[mapa['bodega']].astype(str) if mapa.get('bodega') and mapa['bodega'] in df_base.columns else 'N/D'
+    
     abc = df_base[mapa.get('abc')].fillna('C').astype(str).str.strip().str.upper() if mapa.get('abc') and mapa.get('abc') in df_base.columns else pd.Series('C', index=df_base.index)
     xyz = df_base[mapa.get('xyz')].fillna('Z').astype(str).str.strip().str.upper() if mapa.get('xyz') and mapa.get('xyz') in df_base.columns else pd.Series('Z', index=df_base.index)
     df_l['ABC_XYZ'] = df_base[mapa.get('abc_xyz')].fillna(abc + xyz).astype(str).str.strip().str.upper() if mapa.get('abc_xyz') and mapa.get('abc_xyz') in df_base.columns else abc + xyz
@@ -374,7 +378,6 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     l_mod = (ap_w * pal_v) + (0.10 * (pal_v + 1)) + t_m
     niv = max(1, sum(1 for n in range(50) if n*a_n_v+ap_h+0.15 <= alt_m and n*a_n_v <= conf['alt_grua']))
     
-    # LÓGICA DE ALINEACIÓN DE RACKS (PEGA A LA PARED)
     pegar_pared = conf.get('racks_en_pared', False)
     offset_y = 0.0 if pegar_pared else 2.0
     offset_x = 0.0 if pegar_pared else 2.0
@@ -523,15 +526,22 @@ def mostrar_cubicadora():
     if st.session_state.df_resultados is not None:
         df_f = st.session_state.df_resultados.copy()
         MAPA = st.session_state.mapa_columnas
-        col_m1, col_m2 = st.columns(2)
-        with col_m1: modo = st.radio("⚙️ Modo de cálculo:", ["EXCEL", "OPTIMO"], horizontal=True)
-        with col_m2:
+        
+        c_filt1, c_filt2, c_filt3, c_filt4 = st.columns(4)
+        with c_filt1: 
+            modo = st.radio("⚙️ Modo de cálculo:", ["EXCEL", "OPTIMO"])
+        with c_filt2:
             if MAPA.get('abc'):
                 opc_abc = sorted([str(x) for x in df_f[MAPA['abc']].unique() if str(x) != 'nan'])
-                if opc_abc: df_f = df_f[df_f[MAPA['abc']].isin(st.multiselect("🔍 Filtro Rápido (ABC):", opc_abc, default=opc_abc))]
+                if opc_abc: df_f = df_f[df_f[MAPA['abc']].isin(st.multiselect("🔍 Filtro ABC:", opc_abc, default=opc_abc))]
+        with c_filt3:
             if MAPA.get('xyz'):
                 opc_xyz = sorted([str(x) for x in df_f[MAPA['xyz']].unique() if str(x) != 'nan'])
-                if opc_xyz: df_f = df_f[df_f[MAPA['xyz']].isin(st.multiselect("🔍 Filtro Demanda (XYZ):", opc_xyz, default=opc_xyz))]
+                if opc_xyz: df_f = df_f[df_f[MAPA['xyz']].isin(st.multiselect("🔍 Filtro XYZ:", opc_xyz, default=opc_xyz))]
+        with c_filt4:
+            if MAPA.get('bodega'):
+                opc_bodega = sorted([str(x) for x in df_f[MAPA['bodega']].unique() if str(x) != 'nan' and str(x) != 'N/D'])
+                if opc_bodega: df_f = df_f[df_f[MAPA['bodega']].isin(st.multiselect("🏭 Filtro Bodega:", opc_bodega, default=opc_bodega))]
 
         st.markdown("<h3 style='color:#0f172a; font-weight:800; font-size:18px; margin-top:20px;'>🔍 Buscador Masivo y Panel de Cálculo</h3>", unsafe_allow_html=True)
         lista_skus_all = df_f[MAPA["sku"]].astype(str).str.upper().unique().tolist()
@@ -709,13 +719,22 @@ def mostrar_layout():
     with col_an:
         st.markdown("<h4 style='color:#8e44ad; margin-top:0;'>🔍 4. Análisis y Filtros</h4>", unsafe_allow_html=True)
         st.session_state.fuente_datos = st.selectbox('📂 Fuente:', ['Data Original', 'Data Optimizada'], index=['Data Original', 'Data Optimizada'].index(st.session_state.fuente_datos))
-        st.session_state.filtro_sublayout = st.text_area("🔍 Buscador Masivo de SKUs (Layout 3D):\nSepara los códigos por comas. Déjalo en 'TODOS' para ver la bodega completa.", value=st.session_state.filtro_sublayout, height=70)
+        st.session_state.filtro_sublayout = st.text_area("🔍 Buscador Masivo de SKUs:\nSepara los códigos por comas. Déjalo en 'TODOS' para ver completo.", value=st.session_state.filtro_sublayout, height=70)
         st.markdown("<b style='font-size:11px; color:#34495e;'>🔠 Zonas ABC a procesar:</b>", unsafe_allow_html=True)
         cb_a, cb_b, cb_c = st.columns(3)
         with cb_a: st.session_state.chk_a = st.checkbox('Zona A', value=st.session_state.chk_a)
         with cb_b: st.session_state.chk_b = st.checkbox('Zona B', value=st.session_state.chk_b)
         with cb_c: st.session_state.chk_c = st.checkbox('Zona C', value=st.session_state.chk_c)
         st.markdown("<b style='font-size:10px; color:#34495e; margin-top:5px; display:block;'>CONTROLES DE EVALUACIÓN:</b>", unsafe_allow_html=True)
+        
+        # Filtro Bodega en Layout
+        df_fuente_curr = dict_demanda[st.session_state.fuente_datos]
+        if 'Bodega' in df_fuente_curr.columns:
+            opc_bod_lay = sorted([str(x) for x in df_fuente_curr['Bodega'].unique() if str(x) != 'nan' and str(x) != 'N/D'])
+            if opc_bod_lay:
+                if not st.session_state.bodegas_sel_layout or not any(b in opc_bod_lay for b in st.session_state.bodegas_sel_layout):
+                    st.session_state.bodegas_sel_layout = opc_bod_lay
+                st.session_state.bodegas_sel_layout = st.multiselect("🏭 Filtrar por Bodega:", opc_bod_lay, default=st.session_state.bodegas_sel_layout)
         
         st.session_state.racks_en_pared = st.toggle("🧱 ¿Primer rack pegado a la pared?", value=st.session_state.get('racks_en_pared', False))
         st.session_state.consolidar_saldos = st.toggle("🧩 Consolidar Saldos (Pallets Mixtos)", value=st.session_state.get('consolidar_saldos', False))
@@ -766,6 +785,38 @@ def mostrar_layout():
             st.session_state.w_ptas_este = st.number_input('Ancho E:', value=st.session_state.w_ptas_este)
             st.session_state.w_ptas_oeste = st.number_input('Ancho O:', value=st.session_state.w_ptas_oeste)
 
+    with col_dr:
+        st.markdown("<h4 style='color:#27ae60; margin-top:0;'>📦 2. Slotting y Racks</h4>", unsafe_allow_html=True)
+        df_fuente_curr = dict_demanda['Data Original'] if st.session_state.fuente_datos == 'Data Original' else dict_demanda['Data Optimizada']
+        
+        clases_sel_box = []
+        if st.session_state.chk_a: clases_sel_box.append('A')
+        if st.session_state.chk_b: clases_sel_box.append('B')
+        if st.session_state.chk_c: clases_sel_box.append('C')
+        df_fuente_curr = df_fuente_curr[df_fuente_curr['ABC'].isin(clases_sel_box)]
+        
+        # Filtro de Bodega Visual
+        if getattr(st.session_state, 'bodegas_sel_layout', []):
+            df_fuente_curr = df_fuente_curr[df_fuente_curr['Bodega'].isin(st.session_state.bodegas_sel_layout)]
+        
+        raw_f_box = st.session_state.filtro_sublayout.strip()
+        if raw_f_box and raw_f_box.upper() != 'TODOS':
+            skus_f_box = set(s.strip().upper() for s in re.split(r'[,\s;]+', raw_f_box) if s.strip())
+            if skus_f_box:
+                df_fuente_curr = df_fuente_curr[df_fuente_curr['SKU'].astype(str).str.upper().isin(skus_f_box)]
+        
+        tot_p_fuente = df_fuente_curr['Cantidad_Pallets'].sum()
+        zona_a = df_fuente_curr[df_fuente_curr['ABC']=='A']['Cantidad_Pallets'].sum()
+        zona_b = df_fuente_curr[df_fuente_curr['ABC']=='B']['Cantidad_Pallets'].sum()
+        zona_c = df_fuente_curr[df_fuente_curr['ABC']=='C']['Cantidad_Pallets'].sum()
+        
+        st.markdown(f"<div style='background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:12px; font-size:12px; font-family:monospace; margin-bottom:12px;'><b style='color:#27ae60;'>✅ REPORTE CUBICADORA OK</b><br><b>Total a Ubicar:</b> {tot_p_fuente:,.0f} Pallets<br><span style='color:#e74c3c;'>🔹 Zona A: {zona_a:,.0f} pal</span><br><span style='color:#e67e22;'>🔹 Zona B: {zona_b:,.0f} pal</span><br><span style='color:#3498db;'>🔹 Zona C: {zona_c:,.0f} pal</span></div>", unsafe_allow_html=True)
+        
+        st.markdown("<b style='color:#7f8c8d; font-size:11px;'>ESTRUCTURA RACK</b>", unsafe_allow_html=True)
+        st.session_state.pallets_viga = st.selectbox('Config. Viga:', [1, 2, 3], index=[1,2,3].index(st.session_state.pallets_viga))
+        st.session_state.peso_max_pallet = st.number_input('Peso Máx. Viga (kg):', value=st.session_state.peso_max_pallet)
+        st.session_state.oficinas = [{'x': st.session_state.ofi_pos_x, 'y': st.session_state.ofi_pos_y, 'w': st.session_state.ofi_largo, 'd': st.session_state.ofi_ancho, 'h': st.session_state.ofi_alto}] if st.session_state.ofi_largo > 0 else []
+
     if btn_crear_sel:
         raw = st.session_state.filtro_sublayout.strip()
         skus_f = set(s.strip().upper() for s in re.split(r'[,\s;]+', raw) if s.strip())
@@ -788,6 +839,8 @@ def mostrar_layout():
             if st.session_state.chk_c: clases_sel.append('C')
             df_test_base = dict_demanda[st.session_state.fuente_datos]
             df_test_base = df_test_base[df_test_base['ABC'].isin(clases_sel)]
+            if getattr(st.session_state, 'bodegas_sel_layout', []):
+                df_test_base = df_test_base[df_test_base['Bodega'].isin(st.session_state.bodegas_sel_layout)]
             raw_f = st.session_state.filtro_sublayout.strip()
             skus_f = set(s.strip().upper() for s in re.split(r'[,\s;]+', raw_f) if s.strip())
             if skus_f and raw_f.upper() != 'TODOS': df_test_base = df_test_base[df_test_base['SKU'].astype(str).str.upper().isin(skus_f)]
@@ -815,6 +868,8 @@ def mostrar_layout():
         
         df_activa = dict_demanda[st.session_state.fuente_datos]
         df_activa = df_activa[df_activa['ABC'].isin(clases_sel)]
+        if getattr(st.session_state, 'bodegas_sel_layout', []):
+            df_activa = df_activa[df_activa['Bodega'].isin(st.session_state.bodegas_sel_layout)]
         
         raw = st.session_state.filtro_sublayout.strip()
         if getattr(st.session_state, 'modo_layout_eval', 'todos') == 'filtro':
