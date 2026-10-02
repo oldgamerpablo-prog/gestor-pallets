@@ -884,30 +884,18 @@ def mostrar_layout():
         s_bg, s_color = ("#ecfdf5", "#065f46") if dif >= 0 else ("#fef2f2", "#991b1b")
         msg_txt = f"✔️ ¡ÉXITO! Caben todos y sobran {dif:,}." if dif >= 0 else f"⚠️ ¡ALERTA! Te faltan {abs(dif):,} posiciones."
 
-        st.markdown(f"""
-        <div style='margin:15px auto; max-width:450px; border:2px solid {s_color}; border-radius:8px; background:{s_bg}; padding:12px; font-family:system-ui, sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
-            <div style='color:#0f172a; font-weight:900; font-size:13px; margin-bottom:4px; text-align:center; text-transform:uppercase;'>📊 Evaluación de Capacidad</div>
-            <div style='color:#475569; font-size:11px; text-align:center; margin-bottom:8px;'>Zonas Evaluadas: <b>{','.join(clases_sel)}</b></div>
-            <div style='color:{s_color}; font-weight:bold; font-size:12px; margin-bottom:12px; text-align:center; padding: 4px; background: rgba(255,255,255,0.5); border-radius:4px;'>{msg_txt}</div>
-            
-            <div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 4px;'>
-                <span><b>Racks en Planta:</b></span><span>{res_box['modulos']:,} mód.</span>
-            </div>
-            <div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 8px;'>
-                <span><b>Niveles en Altura:</b></span><span>{res_box['niveles']} niv.</span>
-            </div>
-            
-            <div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 4px; border-top:1px solid #cbd5e1; padding-top:6px;'>
-                <span><b>Capacidad Total Racks:</b></span><span style='font-weight:bold;'>{res_box['capacidad']:,} pal</span>
-            </div>
-            <div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 4px;'>
-                <span><b>Pallets Almacenados (3D):</b></span><span style='font-weight:900; color:#0284c7;'>{res_box['pallets_ubicados_totales']:,} pal</span>
-            </div>
-            <div style='display:flex; justify-content: space-between; font-size:12px; color:#334155;'>
-                <span><b>Demanda Solicitada:</b></span><span style='font-weight:bold;'>{res_box['demanda']:,} pal</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        # FIX HTML PARSING ISSUE IN STREAMLIT MARKDOWN
+        html_eval = f"""<div style='margin:15px auto; max-width:450px; border:2px solid {s_color}; border-radius:8px; background:{s_bg}; padding:12px; font-family:system-ui, sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
+<div style='color:#0f172a; font-weight:900; font-size:13px; margin-bottom:4px; text-align:center; text-transform:uppercase;'>📊 Evaluación de Capacidad</div>
+<div style='color:#475569; font-size:11px; text-align:center; margin-bottom:8px;'>Zonas Evaluadas: <b>{','.join(clases_sel)}</b></div>
+<div style='color:{s_color}; font-weight:bold; font-size:12px; margin-bottom:12px; text-align:center; padding: 4px; background: rgba(255,255,255,0.5); border-radius:4px;'>{msg_txt}</div>
+<div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 4px;'><span><b>Racks en Planta:</b></span><span>{res_box['modulos']:,} mód.</span></div>
+<div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 8px;'><span><b>Niveles en Altura:</b></span><span>{res_box['niveles']} niv.</span></div>
+<div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 4px; border-top:1px solid #cbd5e1; padding-top:6px;'><span><b>Capacidad Total Racks:</b></span><span style='font-weight:bold;'>{res_box['capacidad']:,} pal</span></div>
+<div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 4px;'><span><b>Pallets Almacenados (3D):</b></span><span style='font-weight:900; color:#0284c7;'>{res_box['pallets_ubicados_totales']:,} pal</span></div>
+<div style='display:flex; justify-content: space-between; font-size:12px; color:#334155;'><span><b>Demanda Solicitada:</b></span><span style='font-weight:bold;'>{res_box['demanda']:,} pal</span></div>
+</div>"""
+        st.markdown(html_eval, unsafe_allow_html=True)
 
     if st.session_state.layout_generado and st.session_state.res_layout_actual is not None:
         st.markdown("---")
@@ -1181,7 +1169,6 @@ def mostrar_layout():
                                     const b1 = new THREE.Mesh(new THREE.BoxGeometry(lm - 0.16, data.viga_h, 0.05), beamMat);
                                     b1.position.set(rx + lm / 2, zv, -(ry + 0.025));
                                     scene.add(b1);
-
                                     const b2 = new THREE.Mesh(new THREE.BoxGeometry(lm - 0.16, data.viga_h, 0.05), beamMat);
                                     b2.position.set(rx + lm / 2, zv, -(ry + pd - 0.025));
                                     scene.add(b2);
@@ -1189,7 +1176,6 @@ def mostrar_layout():
                                     const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, data.viga_h, lm - 0.16), beamMat);
                                     b1.position.set(ry + 0.025, zv, -(rx + lm / 2));
                                     scene.add(b1);
-
                                     const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, data.viga_h, lm - 0.16), beamMat);
                                     b2.position.set(ry + pd - 0.025, zv, -(rx + lm / 2));
                                     scene.add(b2);
