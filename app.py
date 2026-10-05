@@ -4,7 +4,6 @@ import json
 import math
 import re
 import unicodedata
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import plotly.express as px
@@ -22,13 +21,16 @@ PESO_MADERA_PALLET = 25
 
 if "menu_seleccion" not in st.session_state: st.session_state.menu_seleccion = "🏠 Portada Principal"
 if "tipo_stock" not in st.session_state: st.session_state.tipo_stock = "Stock Promedio"
+if "bodegas_sel" not in st.session_state: st.session_state.bodegas_sel = []
 if "skus_activos" not in st.session_state: st.session_state.skus_activos = []
 if "skus_invalidos" not in st.session_state: st.session_state.skus_invalidos = []
 if "df_original" not in st.session_state: st.session_state.df_original = None
 if "df_resultados" not in st.session_state: st.session_state.df_resultados = None
 if "mapa_columnas" not in st.session_state: st.session_state.mapa_columnas = None
-if "historial_inbound" not in st.session_state: st.session_state.historial_inbound = pd.DataFrame(columns=["Fecha", "Proveedor", "SKU", "Unidades", "Pallets_Generados", "Ubicacion_Sugerida", "Estado"])
-if "ordenes_picking" not in st.session_state: st.session_state.ordenes_picking = []
+if "historial_inbound" not in st.session_state: 
+    st.session_state.historial_inbound = pd.DataFrame(columns=["Fecha", "Proveedor", "SKU", "Unidades", "Pallets_Generados", "Ubicacion_Sugerida", "Estado"])
+if "ordenes_picking" not in st.session_state: 
+    st.session_state.ordenes_picking = []
 
 parametros_layout = {
     "l_bod": 50.0, "a_bod": 40.0, "alt_bod": 7.0, "cant_pilares_x": 4, "cant_pilares_y": 1,
@@ -40,7 +42,7 @@ parametros_layout = {
     "cant_ptas_sur": 0, "w_ptas_sur": 6.0, "cant_ptas_este": 0, "w_ptas_este": 6.0,
     "cant_ptas_oeste": 0, "w_ptas_oeste": 6.0, "fuente_datos": "Data Original",
     "filtro_sublayout": "TODOS", "chk_a": True, "chk_b": True, "chk_c": True,
-    "consolidar_saldos": False, "modo_vista_color": "3 Zonas (ABC)"
+    "consolidar_saldos": False, "modo_vista_color": "3 Zonas (ABC)", "racks_en_pared": False
 }
 for k, v in parametros_layout.items():
     if k not in st.session_state: st.session_state[k] = v
@@ -52,6 +54,9 @@ if "kpi_layout_ubicados" not in st.session_state: st.session_state.kpi_layout_ub
 
 css_styles = "<style>.box-3d{transition:all 0.25s cubic-bezier(0.25,0.8,0.25,1);cursor:crosshair;}.box-3d:hover{transform:scale(1.08) translateY(-3px);box-shadow:0 10px 20px rgba(0,0,0,0.4)!important;z-index:100!important;filter:brightness(1.1);}.cota-linea,.cota-linea-v{position:absolute;display:flex;align-items:center;justify-content:center;font-size:10px;color:#475569;font-weight:bold;background-repeat:no-repeat;}.cota-linea{border-left:1px solid #64748b;border-right:1px solid #64748b;background-image:linear-gradient(#64748b,#64748b);background-size:100% 1px;background-position:center;}.cota-linea-v{border-top:1px solid #64748b;border-bottom:1px solid #64748b;background-image:linear-gradient(#64748b,#64748b);background-size:1px 100%;background-position:center;flex-direction:column;}.cota-texto{background:white;padding:2px 4px;border-radius:3px;z-index:2;}.kpi-box{background:#ffffff;border:1px solid #e2e8f0;padding:15px;border-radius:8px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,0.1);}.kpi-title{font-size:11px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px;}.kpi-value{font-size:24px;font-weight:700;color:#0f172a;}.kpi-box-danger{background:#fef2f2!important;border:1px solid #fecaca!important;}.kpi-value-danger{color:#dc2626!important;}</style>"
 color_styles = "<style>.hero-container-color{background:linear-gradient(135deg,#0f172a 0%,#1e3a8a 50%,#0369a1 100%);border-radius:16px;padding:50px 30px;text-align:center;box-shadow:0 12px 30px rgba(15,23,42,0.25);margin-bottom:35px;}.hero-title-color{font-size:3.6rem;font-weight:900;color:#ffffff;letter-spacing:-1px;margin-bottom:14px;text-align:center;}.hero-subtitle-color{color:#e2e8f0;font-size:1.25rem;font-weight:400;max-width:850px;margin:0 auto;line-height:1.6;text-align:center;}.color-card{background:#ffffff;border-radius:14px;padding:25px;height:230px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 6px 18px rgba(0,0,0,0.05);transition:all 0.3s ease;margin-bottom:15px;border-top:5px solid #2563eb;}.color-card-green{border-top-color:#059669;}.color-card-purple{border-top-color:#7c3aed;}.color-card-amber{border-top-color:#d97706;}.color-card-rose{border-top-color:#e11d48;}.color-card:hover{box-shadow:0 12px 28px rgba(0,0,0,0.12);transform:translateY(-4px);}.card-icon-header{display:flex;align-items:center;justify-content:space-between;}.card-icon{font-size:2rem;}.card-tag-color{font-size:0.72rem;font-weight:800;padding:4px 12px;border-radius:20px;letter-spacing:0.5px;}.tag-blue{background:#dbeafe;color:#1e40af;}.tag-green{background:#d1fae5;color:#065f46;}.tag-purple{background:#ede9fe;color:#5b21b6;}.tag-soon{background:#f1f5f9;color:#64748b;}.color-card-title{color:#0f172a;font-size:1.25rem;font-weight:800;margin:10px 0 6px 0;}.color-card-desc{color:#475569;font-size:0.9rem;line-height:1.45;margin:0;}</style>"
+
+def clean_html(html_str):
+    return "\n".join(line.strip() for line in html_str.split("\n"))
 
 # ============================================================
 # 2. FUNCIONES CORE INTELIGENTES
@@ -83,10 +88,9 @@ def procesar_datos(df_original):
     mapa = {}
     mapa["sku"] = encontrar_columna(cols, ["codigo", "producto"]) or encontrar_columna(cols, ["sku"]) or encontrar_columna(cols, ["codigo"])
     
-    # NUEVA LÓGICA DE MAPEO PARA STOCK PROMEDIO Y MÁXIMO
     mapa["stock_promedio"] = encontrar_columna(cols, ["stock", "promedio"]) or encontrar_columna(cols, ["promedio"]) or encontrar_columna(cols, ["stock"])
     mapa["stock_maximo"] = encontrar_columna(cols, ["stock", "maximo"]) or encontrar_columna(cols, ["maximo"]) or mapa["stock_promedio"]
-    mapa["stock"] = mapa["stock_promedio"] # Legado por seguridad
+    mapa["stock"] = mapa["stock_promedio"]
     
     mapa["peso"] = encontrar_columna(cols, ["peso"], ["total", "pallet"])
     mapa["formato"] = encontrar_columna(cols, ["formato", "principal"])
@@ -102,17 +106,21 @@ def procesar_datos(df_original):
     mapa["altura_pallet"] = encontrar_columna(cols, ["altura", "pallet"], ["total", "paletizada"]) or me_lp or me_ap
     mapa["unidades_pallet"] = encontrar_columna(cols, ["unidades", "pallet"])
     mapa["altura_total"] = encontrar_columna(cols, ["altura", "total", "pallet"]) or me_lp or encontrar_columna(cols, ["altura", "paletizada"])
+    
     mapa["abc"] = encontrar_columna(cols, ["abc"], ["xyz"])
     mapa["xyz"] = encontrar_columna(cols, ["xyz"], ["abc"])
     mapa["abc_xyz"] = encontrar_columna(cols, ["abc", "xyz"])
-    mapa["familia"], mapa["bodega"], mapa["ranking"] = encontrar_columna(cols, ["familia"]), encontrar_columna(cols, ["bodega"]), encontrar_columna(cols, ["ranking"])
+    mapa["familia"] = encontrar_columna(cols, ["familia"])
+    mapa["bodega"] = encontrar_columna(cols, ["bodega"])
+    mapa["ranking"] = encontrar_columna(cols, ["ranking"])
+
     df_trabajo = df_original.copy()
+    
     if "Pallets_Totales_Optimo" in df_trabajo.columns:
         mapa["is_opt_report"] = True
         mapa["stock"] = "Stock" if "Stock" in df_trabajo.columns else mapa.get("stock")
         mapa["stock_promedio"] = "Stock_Promedio" if "Stock_Promedio" in df_trabajo.columns else mapa.get("stock")
         mapa["stock_maximo"] = "Stock_Maximo" if "Stock_Maximo" in df_trabajo.columns else mapa.get("stock")
-        
         mapa["formato"] = "Formato" if "Formato" in df_trabajo.columns else mapa.get("formato")
         mapa["abc"] = "Clasificacion_ABC" if "Clasificacion_ABC" in df_trabajo.columns else mapa.get("abc")
         mapa["xyz"] = "Clasificacion_XYZ" if "Clasificacion_XYZ" in df_trabajo.columns else mapa.get("xyz")
@@ -120,6 +128,7 @@ def procesar_datos(df_original):
         mapa["familia"] = "Familia" if "Familia" in df_trabajo.columns else mapa.get("familia")
         mapa["bodega"] = "Bodega" if "Bodega" in df_trabajo.columns else mapa.get("bodega")
         mapa["ranking"] = "Ranking" if "Ranking" in df_trabajo.columns else mapa.get("ranking")
+        
         df_trabajo[mapa["sku"]] = df_trabajo[mapa["sku"]].astype(str).str.strip()
         if mapa.get("abc"): df_trabajo[mapa["abc"]] = df_trabajo[mapa["abc"]].fillna("C").astype(str).str.strip().str.upper()
         if mapa.get("xyz"): df_trabajo[mapa["xyz"]] = df_trabajo[mapa["xyz"]].fillna("Z").astype(str).str.strip().str.upper()
@@ -168,7 +177,6 @@ def calcular_metricas_dinamicas(fila, mapa, modo="EXCEL"):
     key_stock = "stock_maximo" if escenario_stock == "Stock Máximo" else "stock_promedio"
     
     if mapa.get("is_opt_report"):
-        # Detectar stock según selección
         col_stock = mapa.get(key_stock, mapa.get("stock", "Stock"))
         if col_stock not in fila.index: col_stock = mapa.get("stock", "Stock")
         stock = a_float(fila.get(col_stock), 0)
@@ -178,7 +186,6 @@ def calcular_metricas_dinamicas(fila, mapa, modo="EXCEL"):
         else:
             cap_usada, pallets_comp, efi_vol, estado = a_float(fila.get("Capacidad_Excel"), 0), a_float(fila.get("Pallets_Completos_Excel"), 0), a_float(fila.get("Eficiencia_Vol_Excel_%"), np.nan), str(fila.get("Estado_Excel", "OK"))
         
-        # Recalcular todo en vivo para que el Layout se actualice según el stock seleccionado
         pallets = int(math.ceil(stock / cap_usada)) if stock > 0 and cap_usada > 0 else 0
         ult_unids = (stock - (pallets - 1) * cap_usada) if pallets > 0 else 0
         if ult_unids == 0 and stock > 0: ult_unids = cap_usada
@@ -216,6 +223,7 @@ def calcular_metricas_dinamicas(fila, mapa, modo="EXCEL"):
 
     return {"Capacidad_Usada": cap_usada, "Pallets": pallets, "Unidades_Ultimo": ult_unids, "Ocupacion_Ultimo": (ult_unids / cap_usada * 100) if cap_usada > 0 else 0, "Peso_Pallet": peso_pal, "Estado": estado, "Cap_Excel": cap_ex, "Cap_Optima": cap_op, "Eficiencia_Volumen": efi_vol, "Pallets_Completos": pallets_comp, "Unidades_Sobrante": u_sob, "Stock": stock}
 
+# REPORTE DE 3 HOJAS EN CUBICADORA
 def generar_excel_descarga(df_original, df_resultados, mapa):
     output = io.BytesIO()
     comparativo_rows = []
@@ -238,15 +246,36 @@ def generar_excel_descarga(df_original, df_resultados, mapa):
     output.seek(0)
     return output
 
+# REPORTE DE 3 HOJAS EN LAYOUT WMS
 def generar_wms_excel(df_base, almacen, mapa):
     pos = {}
+    slots_rows = []
     for s in almacen:
-        if s['ocupado']: pos.setdefault(str(s['sku']).upper(), []).append(s['id_posicion'])
+        if s['ocupado']: 
+            pos.setdefault(str(s['sku']).upper(), []).append(s['id_posicion'])
+        slots_rows.append({
+            "ID_Posicion": s['id_posicion'], "Pasillo": s['letra_pasillo'], "Modulo": s['modulo'],
+            "Nivel": s['nivel'], "Slot": s['slot'], "SKU": s.get('sku', 'VACIO'),
+            "Estado": "Ocupado" if s['ocupado'] else "Vacío", "Zona_ABC": s.get('abc', 'N/D'),
+            "Es_Mixto": "SI" if s.get('es_mixto') else "NO"
+        })
+        
     df_exp = df_base.copy()
     col_sku = mapa.get("sku", df_exp.columns[0])
     df_exp['Posiciones_Layout_WMS'] = df_exp[col_sku].apply(lambda x: ", ".join(pos.get(str(x).strip().upper(), ["Sin Ubicar"])))
+    
+    resumen_data = [{
+        "Total_Slots_Racks": len(almacen),
+        "Total_Slots_Ocupados": sum(1 for s in almacen if s['ocupado']),
+        "Total_Slots_Vacios": sum(1 for s in almacen if not s['ocupado']),
+        "Porcentaje_Ocupacion": f"{(sum(1 for s in almacen if s['ocupado'])/len(almacen)*100):.1f}%" if almacen else "0%"
+    }]
+    
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as w: df_exp.to_excel(w, sheet_name="Reporte_WMS", index=False)
+    with pd.ExcelWriter(output, engine='openpyxl') as w:
+        df_exp.to_excel(w, sheet_name="1_Asignacion_WMS", index=False)
+        pd.DataFrame(slots_rows).to_excel(w, sheet_name="2_Mapa_Malla_Slots", index=False)
+        pd.DataFrame(resumen_data).to_excel(w, sheet_name="3_Resumen_Capacidad", index=False)
     output.seek(0)
     return output
 
@@ -348,6 +377,10 @@ def preparar_df_layout(df_base, mapa, modo):
     df_l['Pallets_Completos_Optimo'], df_l['Unidades_Sobrante_Optimo'], df_l['Capacidad_Optima'] = [m['Pallets_Completos'] for m in metrics], [m['Unidades_Sobrante'] for m in metrics], [m['Cap_Optima'] for m in metrics]
     col_alto = mapa.get('altura_total') if mapa.get('altura_total') in df_base.columns else mapa.get('alto')
     df_l['Alto_m'] = pd.to_numeric(df_base[col_alto], errors='coerce').fillna(120) / 100.0 if col_alto and col_alto in df_base.columns else 1.2
+    
+    # EXTRAER BODEGA PARA FILTROS
+    df_l['Bodega'] = df_base[mapa['bodega']].astype(str) if mapa.get('bodega') and mapa['bodega'] in df_base.columns else 'N/D'
+    
     abc = df_base[mapa.get('abc')].fillna('C').astype(str).str.strip().str.upper() if mapa.get('abc') and mapa.get('abc') in df_base.columns else pd.Series('C', index=df_base.index)
     xyz = df_base[mapa.get('xyz')].fillna('Z').astype(str).str.strip().str.upper() if mapa.get('xyz') and mapa.get('xyz') in df_base.columns else pd.Series('Z', index=df_base.index)
     df_l['ABC_XYZ'] = df_base[mapa.get('abc_xyz')].fillna(abc + xyz).astype(str).str.strip().str.upper() if mapa.get('abc_xyz') and mapa.get('abc_xyz') in df_base.columns else abc + xyz
@@ -367,27 +400,47 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     ap_w, pp_d, ap_h = 1.2, 1.2, float(df_activa['Alto_m'].max()) if not df_activa.empty else 1.2
     v_l, v_a = (a_m, l_m) if is_vertical else (l_m, a_m)
     t_m, a_n_v = 0.10, ap_h + 0.27
-    l_mod = (ap_w * pal_v) + (0.10 * (pal_v + 1)) + t_m
     niv = max(1, sum(1 for n in range(50) if n*a_n_v+ap_h+0.15 <= alt_m and n*a_n_v <= conf['alt_grua']))
+    l_mod = (ap_w * pal_v) + (0.10 * (pal_v + 1)) + t_m
+    
+    pegar_pared = conf.get('racks_en_pared', False)
+    offset_y = 0.0 if pegar_pared else 2.0
+    offset_x = 0.0 if pegar_pared else 2.0
+    
     a_b = (pp_d * 2) + conf['pasillo']
-    filas, s_c = math.floor(v_a / a_b), conf['cant_pas_trans'] + 1
-    m_x_s = math.floor(((v_l - 4.0 - ((s_c-1) * (conf['ancho_pas_trans'] if conf['cant_pas_trans']>0 else 0))) / s_c) / l_mod) if s_c > 0 else 0
+    s_c = conf['cant_pas_trans'] + 1
+    
+    espacio_x_disp = v_l - offset_x - (2.0 if not pegar_pared else 0.5)
+    m_x_s = math.floor(((espacio_x_disp - ((s_c-1) * (conf['ancho_pas_trans'] if conf['cant_pas_trans']>0 else 0))) / s_c) / l_mod) if s_c > 0 else 0
+    
     dp_x, dp_y, cx, cy = conf['dist_pilares_x'], conf['dist_pilares_y'], conf['cant_pilares_x'], conf['cant_pilares_y']
     dxr, nx = (l_m / (cx + 1), cx) if cx > 0 else (dp_x, math.floor(l_m / dp_x) if dp_x > 0 else 0)
     dyr, ny = (a_m / (cy + 1), cy) if cy > 0 else (dp_y, math.floor(a_m / dp_y) if dp_y > 0 else 0)
     pil_r = [(px * dxr, py * dyr) for px in range(1, nx + 1) for py in range(1, ny + 1)]
     v_pil = [(py, px) for px, py in pil_r] if is_vertical else pil_r
     
+    y_cursor = offset_y
+    filas_y = []
+    if pegar_pared:
+        filas_y.append([(y_cursor, 'A')])
+        y_cursor += pp_d + conf['pasillo']
+        
+    while y_cursor + (pp_d * 2) <= v_a - (0.0 if pegar_pared else 2.0):
+        filas_y.append([(y_cursor, 'A'), (y_cursor + pp_d, 'B')])
+        y_cursor += (pp_d * 2) + conf['pasillo']
+        
+    if pegar_pared and (y_cursor + pp_d <= v_a):
+        filas_y.append([(y_cursor, 'A')])
+    
     m_v, m_l, alm = 0, [] , []
-    for f in range(filas):
+    for f, lados in enumerate(filas_y):
         l_pas = chr(64 + f + 1) if f+1 <= 26 else f"P{f+1}"
-        yr1, yr2 = (f * a_b) + 2.0, (f * a_b) + 2.0 + pp_d
         for s in range(s_c):
-            x_ini = 2.0 + s * (m_x_s * l_mod + (conf['ancho_pas_trans'] if conf['cant_pas_trans']>0 else 0))
+            x_ini = offset_x + s * (m_x_s * l_mod + (conf['ancho_pas_trans'] if conf['cant_pas_trans']>0 else 0))
             for m in range(m_x_s):
                 xp = x_ini + (m * l_mod)
                 n_m = (s * m_x_s) + m + 1
-                for yr in [yr1, yr2]:
+                for yr, lado in lados:
                     rx1, ry1, rx2, ry2 = (yr, xp, yr+pp_d, xp+l_mod) if is_vertical else (xp, yr, xp+l_mod, yr+pp_d)
                     if any(not (rx2+1.5<o['x'] or rx1-1.5>o['x']+o['w'] or ry2+1.5<o['y'] or ry1-1.5>o['y']+o['d']) for o in conf.get('oficinas', [])) or any(not (rx2<z['x1'] or rx1>z['x2'] or ry2<z['y1'] or ry1>z['y2']) for z in sz): continue
                     b_p = any(xp - 0.25 <= px <= xp + l_mod + 0.25 and yr - 0.25 <= py <= yr + pp_d + 0.25 for px, py in v_pil)
@@ -396,7 +449,7 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
                         m_v += 1
                         for n in range(niv):
                             for p_i in range(pal_v):
-                                alm.append({'id_posicion': f"{l_pas}-{n_m:02d}-{n+1}{'A' if yr==yr1 else 'B'}-{p_i+1}", 'letra_pasillo': l_pas, 'pasillo': f+1, 'lado': 'A' if yr==yr1 else 'B', 'modulo': n_m, 'nivel': n+1, 'slot': p_i+1, 'x': xp, 'y': yr, 'x_pal': xp + t_m + 0.10 + (p_i * 1.3), 'z': n * a_n_v, 'ocupado': False})
+                                alm.append({'id_posicion': f"{l_pas}-{n_m:02d}-{n+1}{lado}-{p_i+1}", 'letra_pasillo': l_pas, 'pasillo': f+1, 'lado': lado, 'modulo': n_m, 'nivel': n+1, 'slot': p_i+1, 'x': xp, 'y': yr, 'x_pal': xp + t_m + 0.10 + (p_i * 1.3), 'z': n * a_n_v, 'ocupado': False})
     alm.sort(key=lambda x: (x['letra_pasillo'], x['nivel'], x['x'], x['y']))
     
     pallets_a_ubicar = []
@@ -498,15 +551,30 @@ def mostrar_cubicadora():
     if st.session_state.df_resultados is not None:
         df_f = st.session_state.df_resultados.copy()
         MAPA = st.session_state.mapa_columnas
-        col_m1, col_m2 = st.columns(2)
-        with col_m1: modo = st.radio("⚙️ Modo de cálculo:", ["EXCEL", "OPTIMO"], horizontal=True)
+        
+        # FILTRO GLOBAL DE BODEGA
+        if getattr(st.session_state, 'bodegas_sel', []):
+            df_f = df_f[df_f[MAPA['bodega']].isin(st.session_state.bodegas_sel)]
+            
+        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+        with col_m1: 
+            modo = st.radio("⚙️ Modo de cálculo:", ["EXCEL", "OPTIMO"])
         with col_m2:
             if MAPA.get('abc'):
                 opc_abc = sorted([str(x) for x in df_f[MAPA['abc']].unique() if str(x) != 'nan'])
-                if opc_abc: df_f = df_f[df_f[MAPA['abc']].isin(st.multiselect("🔍 Filtro Rápido (ABC):", opc_abc, default=opc_abc))]
+                if opc_abc: df_f = df_f[df_f[MAPA['abc']].isin(st.multiselect("🔍 Filtro ABC:", opc_abc, default=opc_abc))]
+        with col_m3:
             if MAPA.get('xyz'):
                 opc_xyz = sorted([str(x) for x in df_f[MAPA['xyz']].unique() if str(x) != 'nan'])
-                if opc_xyz: df_f = df_f[df_f[MAPA['xyz']].isin(st.multiselect("🔍 Filtro Demanda (XYZ):", opc_xyz, default=opc_xyz))]
+                if opc_xyz: df_f = df_f[df_f[MAPA['xyz']].isin(st.multiselect("🔍 Filtro XYZ:", opc_xyz, default=opc_xyz))]
+        with col_m4:
+            if MAPA.get('bodega') and MAPA['bodega'] in df_f.columns:
+                opc_bod_cub = sorted([str(x) for x in df_f[MAPA['bodega']].unique() if pd.notna(x) and str(x) != 'nan' and str(x) != 'N/D'])
+                if opc_bod_cub:
+                    bod_def = [b for b in st.session_state.get("bodegas_sel", opc_bod_cub) if b in opc_bod_cub] or opc_bod_cub
+                    bod_cub_sel = st.multiselect("🏭 Filtro Bodega:", opc_bod_cub, default=bod_def, key="ms_bodega_cub_page")
+                    df_f = df_f[df_f[MAPA['bodega']].isin(bod_cub_sel)]
+                    st.session_state.bodegas_sel = bod_cub_sel
 
         st.markdown("<h3 style='color:#0f172a; font-weight:800; font-size:18px; margin-top:20px;'>🔍 Buscador Masivo y Panel de Cálculo</h3>", unsafe_allow_html=True)
         lista_skus_all = df_f[MAPA["sku"]].astype(str).str.upper().unique().tolist()
@@ -586,33 +654,29 @@ def mostrar_cubicadora():
                         bg_estado = "#fef2f2" if "PELIGRO" in estado or "EXCEL" in estado else "#fffbeb" if "REVISAR" in estado else "#ecfdf5"
                         border_estado = "#fecaca" if "PELIGRO" in estado or "EXCEL" in estado else "#fde68a" if "REVISAR" in estado else "#a7f3d0"
 
-                        html_header = f"""
-                        <div style="font-family: 'Segoe UI', system-ui, sans-serif; width: 100%; background: #ffffff; border: 1px solid #e2e8f0; border-bottom:none; border-radius: 12px 12px 0 0; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; box-sizing: border-box;">
-                            <div style="background: #0f172a; padding: 20px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid {color_estado};">
-                                <div><div style="color: #94a3b8; font-size: 11px; font-weight: 800; letter-spacing: 1px;">ANÁLISIS DE ESTIBA</div><div style="color: #ffffff; font-size: 26px; font-weight: 900; margin: 4px 0;">{sku}</div><div style="color: #cbd5e1; font-size: 13px;">Formato: <span style="color: #fff; font-weight:600;">{formato}</span> &nbsp;|&nbsp; Familia: <span style="color: #fff; font-weight:600;">{fam}</span> &nbsp;|&nbsp; Bodega: <span style="color: #38bdf8; font-weight:700;">{bodega}</span></div></div>
-                                <div style="background: {bg_estado}; border: 1px solid {border_estado}; padding: 10px 18px; border-radius: 6px; text-align: right;"><div style="color: {color_estado}; font-size: 10px; font-weight: 900;">DIAGNÓSTICO</div><div style="color: {color_estado}; font-size: 15px; font-weight: 900;">{estado}</div></div>
-                            </div>
-                            <div style="padding: 20px 25px 5px 25px;">
-                                <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin-bottom: 15px;">
-                                    <div class="kpi-box"><div class="kpi-title">{escenario_stock}</div><div class="kpi-value">{fmt(m['Stock'], 1)}</div></div>
-                                    <div class="kpi-box" style="background:#f0f9ff; border:1px solid #bae6fd;"><div class="kpi-title">Unid. Pallet</div><div class="kpi-value" style="color:#0284c7;">{fmt(cap, 0)}</div></div>
-                                    <div class="kpi-box" style="background:#f0f9ff; border:1px solid #bae6fd;"><div class="kpi-title">Pallets Req.</div><div class="kpi-value" style="color:#0284c7;">{pallets}</div></div>
-                                    <div class="kpi-box {'kpi-box-danger' if es_numero(peso_est) and peso_est > MAX_PESO_PALLET else ''}"><div class="kpi-title">Peso (Kg)</div><div class="kpi-value {'kpi-value-danger' if es_numero(peso_est) and peso_est > MAX_PESO_PALLET else ''}">{fmt(peso_est, 1)}</div></div>
-                                    <div class="kpi-box"><div class="kpi-title">Volumen %</div><div class="kpi-value">{fmt(efi_vol, 1)}%</div></div>
-                                </div>
-                            </div>
-                        </div>
-                        """
-                        html_datos_base = f"""
-                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 0 12px; padding: 20px; font-family: system-ui; height: 100%; box-sizing: border-box;">
-                            <h4 style="margin:0 0 10px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">📋 Datos Base</h4>
-                            <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="font-weight:600;">Largo:</span><span>{fmt(a_float(valor_col(fila, 'largo', MAPA)),1)} cm</span><span style="font-weight:600;">Ancho:</span><span>{fmt(a_float(valor_col(fila, 'ancho', MAPA)),1)} cm</span><span style="font-weight:600;">Alto:</span><span>{fmt(a_float(valor_col(fila, 'alto', MAPA)),1)} cm</span><span style="font-weight:600;">Peso:</span><span>{fmt(a_float(valor_col(fila, 'peso', MAPA)),2)} kg</span></div>
-                            <h4 style="margin:16px 0 8px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">🏷️ Perfil Logístico</h4>
-                            <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="font-weight:600;">Ranking:</span><span>#{fmt(rank,0) if es_numero(rank) else rank}</span><span style="font-weight:600;">Matriz ABC-XYZ:</span><span style="font-weight:bold; color:#0284c7;">{abc_xyz}</span><span style="font-weight:600;">Zonificación:</span><span style="font-weight:bold; color:#0f766e;">{bodega}</span></div>
-                            <h4 style="margin:16px 0 8px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">⚙️ Resultados</h4>
-                            <div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="color:#ef4444; font-weight:bold;">Excel (Manual):</span><span style="color:#ef4444; font-weight:bold;">{fmt(cap_excel,0)} u</span><span style="color:#10b981; font-weight:bold;">Óptimo Física:</span><span style="color:#10b981; font-weight:bold;">{fmt(cap_optima,0)} u</span><span style="font-weight:600;">Últ. Pallet:</span><span>{fmt(ult_pct,1)}% ({fmt(ult_unids,1)}u)</span></div>
-                        </div>
-                        """
+                        html_header = clean_html(f"""<div style="font-family: 'Segoe UI', system-ui, sans-serif; width: 100%; background: #ffffff; border: 1px solid #e2e8f0; border-bottom:none; border-radius: 12px 12px 0 0; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; box-sizing: border-box;">
+<div style="background: #0f172a; padding: 20px 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 4px solid {color_estado};">
+<div><div style="color: #94a3b8; font-size: 11px; font-weight: 800; letter-spacing: 1px;">ANÁLISIS DE ESTIBA</div><div style="color: #ffffff; font-size: 26px; font-weight: 900; margin: 4px 0;">{sku}</div><div style="color: #cbd5e1; font-size: 13px;">Formato: <span style="color: #fff; font-weight:600;">{formato}</span> &nbsp;|&nbsp; Familia: <span style="color: #fff; font-weight:600;">{fam}</span> &nbsp;|&nbsp; Bodega: <span style="color: #38bdf8; font-weight:700;">{bodega}</span></div></div>
+<div style="background: {bg_estado}; border: 1px solid {border_estado}; padding: 10px 18px; border-radius: 6px; text-align: right;"><div style="color: {color_estado}; font-size: 10px; font-weight: 900;">DIAGNÓSTICO</div><div style="color: {color_estado}; font-size: 15px; font-weight: 900;">{estado}</div></div>
+</div>
+<div style="padding: 20px 25px 5px 25px;">
+<div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px; margin-bottom: 15px;">
+<div class="kpi-box"><div class="kpi-title">{escenario_stock}</div><div class="kpi-value">{fmt(m['Stock'], 1)}</div></div>
+<div class="kpi-box" style="background:#f0f9ff; border:1px solid #bae6fd;"><div class="kpi-title">Unid. Pallet</div><div class="kpi-value" style="color:#0284c7;">{fmt(cap, 0)}</div></div>
+<div class="kpi-box" style="background:#f0f9ff; border:1px solid #bae6fd;"><div class="kpi-title">Pallets Req.</div><div class="kpi-value" style="color:#0284c7;">{pallets}</div></div>
+<div class="kpi-box {'kpi-box-danger' if es_numero(peso_est) and peso_est > MAX_PESO_PALLET else ''}"><div class="kpi-title">Peso (Kg)</div><div class="kpi-value {'kpi-value-danger' if es_numero(peso_est) and peso_est > MAX_PESO_PALLET else ''}">{fmt(peso_est, 1)}</div></div>
+<div class="kpi-box"><div class="kpi-title">Volumen %</div><div class="kpi-value">{fmt(efi_vol, 1)}%</div></div>
+</div>
+</div>
+</div>""")
+                        html_datos_base = clean_html(f"""<div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 0 12px; padding: 20px; font-family: system-ui; height: 100%; box-sizing: border-box;">
+<h4 style="margin:0 0 10px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">📋 Datos Base</h4>
+<div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="font-weight:600;">Largo:</span><span>{fmt(a_float(valor_col(fila, 'largo', MAPA)),1)} cm</span><span style="font-weight:600;">Ancho:</span><span>{fmt(a_float(valor_col(fila, 'ancho', MAPA)),1)} cm</span><span style="font-weight:600;">Alto:</span><span>{fmt(a_float(valor_col(fila, 'alto', MAPA)),1)} cm</span><span style="font-weight:600;">Peso:</span><span>{fmt(a_float(valor_col(fila, 'peso', MAPA)),2)} kg</span></div>
+<h4 style="margin:16px 0 8px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">🏷️ Perfil Logístico</h4>
+<div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="font-weight:600;">Ranking:</span><span>#{fmt(rank,0) if es_numero(rank) else rank}</span><span style="font-weight:600;">Matriz ABC-XYZ:</span><span style="font-weight:bold; color:#0284c7;">{abc_xyz}</span><span style="font-weight:600;">Zonificación:</span><span style="font-weight:bold; color:#0f766e;">{bodega}</span></div>
+<h4 style="margin:16px 0 8px 0; font-size:13px; color:#334155; border-bottom:2px solid #e2e8f0; padding-bottom:5px;">⚙️ Resultados</h4>
+<div style="display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; font-size: 12px; color: #475569;"><span style="color:#ef4444; font-weight:bold;">Excel (Manual):</span><span style="color:#ef4444; font-weight:bold;">{fmt(cap_excel,0)} u</span><span style="color:#10b981; font-weight:bold;">Óptimo Física:</span><span style="color:#10b981; font-weight:bold;">{fmt(cap_optima,0)} u</span><span style="font-weight:600;">Últ. Pallet:</span><span>{fmt(ult_pct,1)}% ({fmt(ult_unids,1)}u)</span></div>
+</div>""")
                         st.markdown(html_header, unsafe_allow_html=True)
                         
                         col_izq, col_der = st.columns([1, 3])
@@ -659,7 +723,7 @@ def mostrar_cubicadora():
 
         with tab_descargar:
             st.write(f"Genera un Excel completo con las **24 columnas WMS** de los **{len(df_f)} SKUs** actuales.")
-            st.download_button("📊 Descargar Reporte WMS Completo (Excel)", data=generar_excel_descarga(st.session_state.df_original, df_f, MAPA), file_name="Reporte_Paletizacion_Optimizado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            st.download_button("📊 Descargar Reporte WMS Completo (Excel 3 Hojas)", data=generar_excel_descarga(st.session_state.df_original, df_f, MAPA), file_name="Reporte_Paletizacion_Optimizado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         with tab_alertas:
             alertas = [{"SKU": row[MAPA["sku"]], "Estado": calcular_metricas_dinamicas(row, MAPA, modo)["Estado"], "Pallets": calcular_metricas_dinamicas(row, MAPA, modo)["Pallets"]} for _, row in df_f.iterrows() if "EXCEL" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "PELIGRO" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"] or "REVISAR" in calcular_metricas_dinamicas(row, MAPA, modo)["Estado"]]
             if alertas: st.warning(f"Se encontraron {len(alertas)} SKUs con alertas."); st.dataframe(pd.DataFrame(alertas), use_container_width=True)
@@ -684,7 +748,7 @@ def mostrar_layout():
     with col_an:
         st.markdown("<h4 style='color:#8e44ad; margin-top:0;'>🔍 4. Análisis y Filtros</h4>", unsafe_allow_html=True)
         st.session_state.fuente_datos = st.selectbox('📂 Fuente:', ['Data Original', 'Data Optimizada'], index=['Data Original', 'Data Optimizada'].index(st.session_state.fuente_datos))
-        st.session_state.filtro_sublayout = st.text_area("🔍 Buscador Masivo de SKUs (Layout 3D):\nSepara los códigos por comas. Déjalo en 'TODOS' para ver la bodega completa.", value=st.session_state.filtro_sublayout, height=70)
+        st.session_state.filtro_sublayout = st.text_area("🔍 Buscador Masivo de SKUs:\nSepara los códigos por comas. Déjalo en 'TODOS' para ver completo.", value=st.session_state.filtro_sublayout, height=70)
         st.markdown("<b style='font-size:11px; color:#34495e;'>🔠 Zonas ABC a procesar:</b>", unsafe_allow_html=True)
         cb_a, cb_b, cb_c = st.columns(3)
         with cb_a: st.session_state.chk_a = st.checkbox('Zona A', value=st.session_state.chk_a)
@@ -692,11 +756,21 @@ def mostrar_layout():
         with cb_c: st.session_state.chk_c = st.checkbox('Zona C', value=st.session_state.chk_c)
         st.markdown("<b style='font-size:10px; color:#34495e; margin-top:5px; display:block;'>CONTROLES DE EVALUACIÓN:</b>", unsafe_allow_html=True)
         
+        # Filtro Bodega en Layout Panel 4
+        df_fuente_curr = dict_demanda[st.session_state.fuente_datos]
+        if 'Bodega' in df_fuente_curr.columns:
+            opc_bod_lay = sorted([str(x) for x in df_fuente_curr['Bodega'].unique() if pd.notna(x) and str(x) != 'nan' and str(x) != 'N/D'])
+            if opc_bod_lay:
+                bod_default_lay = [b for b in st.session_state.get('bodegas_sel', opc_bod_lay) if b in opc_bod_lay] or opc_bod_lay
+                bod_lay_sel = st.multiselect("🏭 Filtrar por Bodega:", opc_bod_lay, default=bod_default_lay, key="ms_bodega_layout_page")
+                st.session_state.bodegas_sel = bod_lay_sel
+        
+        st.session_state.racks_en_pared = st.toggle("🧱 ¿Primer rack pegado a la pared?", value=st.session_state.get('racks_en_pared', False))
         st.session_state.consolidar_saldos = st.toggle("🧩 Consolidar Saldos (Pallets Mixtos)", value=st.session_state.get('consolidar_saldos', False))
         
-        btn_crear_sel = st.button("🎯 Buscar / Crear Layout (SKUs Seleccionados)", type="primary", use_container_width=True)
+        btn_crear_sel = st.button("🎯 Buscar / Crear Layout", type="primary", use_container_width=True)
         btn_crear_gen = st.button("🏢 Mostrar Toda la Bodega", use_container_width=True)
-        btn_propuesta = st.button("🧠 Propuesta Espacial de Layout", use_container_width=True)
+        btn_propuesta = st.button("🧠 Propuesta Espacial IA", use_container_width=True)
 
     with col_inf:
         st.markdown("<h4 style='color:#2980b9; margin-top:0;'>🏢 1. Infraestructura</h4>", unsafe_allow_html=True)
@@ -750,6 +824,10 @@ def mostrar_layout():
         if st.session_state.chk_c: clases_sel_box.append('C')
         df_fuente_curr = df_fuente_curr[df_fuente_curr['ABC'].isin(clases_sel_box)]
         
+        # Filtro de Bodega Visual
+        if getattr(st.session_state, 'bodegas_sel', []):
+            df_fuente_curr = df_fuente_curr[df_fuente_curr['Bodega'].isin(st.session_state.bodegas_sel)]
+        
         raw_f_box = st.session_state.filtro_sublayout.strip()
         if raw_f_box and raw_f_box.upper() != 'TODOS':
             skus_f_box = set(s.strip().upper() for s in re.split(r'[,\s;]+', raw_f_box) if s.strip())
@@ -790,6 +868,8 @@ def mostrar_layout():
             if st.session_state.chk_c: clases_sel.append('C')
             df_test_base = dict_demanda[st.session_state.fuente_datos]
             df_test_base = df_test_base[df_test_base['ABC'].isin(clases_sel)]
+            if getattr(st.session_state, 'bodegas_sel', []):
+                df_test_base = df_test_base[df_test_base['Bodega'].isin(st.session_state.bodegas_sel)]
             raw_f = st.session_state.filtro_sublayout.strip()
             skus_f = set(s.strip().upper() for s in re.split(r'[,\s;]+', raw_f) if s.strip())
             if skus_f and raw_f.upper() != 'TODOS': df_test_base = df_test_base[df_test_base['SKU'].astype(str).str.upper().isin(skus_f)]
@@ -817,6 +897,8 @@ def mostrar_layout():
         
         df_activa = dict_demanda[st.session_state.fuente_datos]
         df_activa = df_activa[df_activa['ABC'].isin(clases_sel)]
+        if getattr(st.session_state, 'bodegas_sel', []):
+            df_activa = df_activa[df_activa['Bodega'].isin(st.session_state.bodegas_sel)]
         
         raw = st.session_state.filtro_sublayout.strip()
         if getattr(st.session_state, 'modo_layout_eval', 'todos') == 'filtro':
@@ -831,7 +913,17 @@ def mostrar_layout():
         s_bg, s_color = ("#ecfdf5", "#065f46") if dif >= 0 else ("#fef2f2", "#991b1b")
         msg_txt = f"✔️ ¡ÉXITO! Caben todos y sobran {dif:,}." if dif >= 0 else f"⚠️ ¡ALERTA! Te faltan {abs(dif):,} posiciones."
 
-        st.markdown(f"<div style='margin-top:10px; border:1px solid {s_color}; border-radius:6px; background:{s_bg}; padding:8px; font-family:sans-serif;'><div style='color:#2c3e50; font-weight:900; font-size:11px; margin-bottom:2px; text-align:center;'>📊 EVALUACIÓN | Zonas: {','.join(clases_sel)}</div><div style='color:{s_color}; font-weight:bold; font-size:11px; margin-bottom:5px; text-align:center;'>{msg_txt}</div><div style='display:grid; grid-template-columns: 1fr 1fr; gap:2px; font-size:10px; color:#334155;'><div><b>Racks Planta:</b></div><div style='text-align:right;'>{res_box['modulos']:,} mód.</div><div><b>Niveles Alto:</b></div><div style='text-align:right;'>{res_box['niveles']} niv.</div><div style='border-top:1px solid #cbd5e1; padding-top:2px;'><b>Capacidad Racks:</b></div><div style='border-top:1px solid #cbd5e1; padding-top:2px; text-align:right; font-weight:bold;'>{res_box['capacidad']:,} pal</div><div><b>Demanda Eval:</b></div><div style='text-align:right; font-weight:bold;'>{res_box['demanda']:,} pal</div></div></div>", unsafe_allow_html=True)
+        html_eval = clean_html(f"""<div style='margin:15px auto; max-width:450px; border:2px solid {s_color}; border-radius:8px; background:{s_bg}; padding:12px; font-family:system-ui, sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
+<div style='color:#0f172a; font-weight:900; font-size:13px; margin-bottom:4px; text-align:center; text-transform:uppercase;'>📊 Evaluación de Capacidad</div>
+<div style='color:#475569; font-size:11px; text-align:center; margin-bottom:8px;'>Zonas Evaluadas: <b>{','.join(clases_sel)}</b></div>
+<div style='color:{s_color}; font-weight:bold; font-size:12px; margin-bottom:12px; text-align:center; padding: 4px; background: rgba(255,255,255,0.5); border-radius:4px;'>{msg_txt}</div>
+<div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 4px;'><span><b>Racks en Planta:</b></span><span>{res_box['modulos']:,} mód.</span></div>
+<div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 8px;'><span><b>Niveles en Altura:</b></span><span>{res_box['niveles']} niv.</span></div>
+<div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 4px; border-top:1px solid #cbd5e1; padding-top:6px;'><span><b>Capacidad Total Racks:</b></span><span style='font-weight:bold;'>{res_box['capacidad']:,} pal</span></div>
+<div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 4px;'><span><b>Pallets Almacenados (3D):</b></span><span style='font-weight:900; color:#0284c7;'>{res_box['pallets_ubicados_totales']:,} pal</span></div>
+<div style='display:flex; justify-content: space-between; font-size:12px; color:#334155;'><span><b>Demanda Solicitada:</b></span><span style='font-weight:bold;'>{res_box['demanda']:,} pal</span></div>
+</div>""")
+        st.markdown(html_eval, unsafe_allow_html=True)
 
     if st.session_state.layout_generado and st.session_state.res_layout_actual is not None:
         st.markdown("---")
@@ -841,7 +933,7 @@ def mostrar_layout():
         with col_exp1: st.session_state.modo_vista_color = st.selectbox("🎨 Zonificación de Colores Racks:", ['3 Zonas (ABC)', '9 Zonas (ABC-XYZ)'], index=['3 Zonas (ABC)', '9 Zonas (ABC-XYZ)'].index(st.session_state.modo_vista_color))
         with col_exp2:
             st.markdown("<div style='height:28px;'></div>", unsafe_allow_html=True)
-            st.download_button("💾 Exportar Ubicaciones WMS (Excel)", data=generar_wms_excel(st.session_state.df_resultados, res['almacen'], st.session_state.mapa_columnas), file_name="WMS_Ubicaciones_Bodega.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+            st.download_button("💾 Exportar Ubicaciones WMS (Excel 3 Hojas)", data=generar_wms_excel(st.session_state.df_resultados, res['almacen'], st.session_state.mapa_columnas), file_name="WMS_Ubicaciones_Bodega.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
 
         l_m, a_m, w_puerta, flujo = st.session_state.l_bod, st.session_state.a_bod, st.session_state.ancho_porton, st.session_state.tipo_flujo
         fig_2d = go.Figure()
@@ -1084,45 +1176,79 @@ def mostrar_layout():
                         data.racks.forEach(r => {
                             const rx = r.x; const ry = r.y; const isV = data.is_vertical;
                             const postGeo = new THREE.BoxGeometry(0.08, hr, 0.08);
-                            const coords = isV ? [[ry, rx], [ry + pd - 0.08, rx], [ry, rx + lm - 0.08], [ry + pd - 0.08, rx + lm - 0.08]] : [[rx, ry], [rx + lm - 0.08, ry], [rx, ry + pd - 0.08], [rx + lm - 0.08, ry + pd - 0.08]];
+                            const coords = isV ? [
+                                [ry, rx], [ry + pd - 0.08, rx],
+                                [ry, rx + lm - 0.08], [ry + pd - 0.08, rx + lm - 0.08]
+                            ] : [
+                                [rx, ry], [rx + lm - 0.08, ry],
+                                [rx, ry + pd - 0.08], [rx + lm - 0.08, ry + pd - 0.08]
+                            ];
+
                             coords.forEach(pt => {
                                 const post = new THREE.Mesh(postGeo, rackPostMat);
                                 post.position.set(pt[0] + 0.04, hr / 2, -(pt[1] + 0.04));
                                 post.castShadow = true;
                                 scene.add(post);
                             });
+
                             for (let n = 1; n <= data.niveles; n++) {
                                 const zv = n * data.alt_nivel_viga - data.viga_h;
                                 if (!isV) {
-                                    const b1 = new THREE.Mesh(new THREE.BoxGeometry(lm - 0.16, data.viga_h, 0.05), beamMat); b1.position.set(rx + lm / 2, zv, -(ry + 0.025)); scene.add(b1);
-                                    const b2 = new THREE.Mesh(new THREE.BoxGeometry(lm - 0.16, data.viga_h, 0.05), beamMat); b2.position.set(rx + lm / 2, zv, -(ry + pd - 0.025)); scene.add(b2);
+                                    const b1 = new THREE.Mesh(new THREE.BoxGeometry(lm - 0.16, data.viga_h, 0.05), beamMat);
+                                    b1.position.set(rx + lm / 2, zv, -(ry + 0.025));
+                                    scene.add(b1);
+                                    const b2 = new THREE.Mesh(new THREE.BoxGeometry(lm - 0.16, data.viga_h, 0.05), beamMat);
+                                    b2.position.set(rx + lm / 2, zv, -(ry + pd - 0.025));
+                                    scene.add(b2);
                                 } else {
-                                    const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, data.viga_h, lm - 0.16), beamMat); b1.position.set(ry + 0.025, zv, -(rx + lm / 2)); scene.add(b1);
-                                    const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, data.viga_h, lm - 0.16), beamMat); b2.position.set(ry + pd - 0.025, zv, -(rx + lm / 2)); scene.add(b2);
+                                    const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.05, data.viga_h, lm - 0.16), beamMat);
+                                    b1.position.set(ry + 0.025, zv, -(rx + lm / 2));
+                                    scene.add(b1);
+                                    const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.05, data.viga_h, lm - 0.16), beamMat);
+                                    b2.position.set(ry + pd - 0.025, zv, -(rx + lm / 2));
+                                    scene.add(b2);
                                 }
                             }
                         });
 
                         let meshesInteractivos = [];
                         const colMapABC = { 'A': 0xef4444, 'B': 0xf59e0b, 'C': 0x3b82f6 };
-                        const colMapXYZ = { 'AX': 0x900C3F, 'AY': 0xC70039, 'AZ': 0xFF5733, 'BX': 0xE67E22, 'BY': 0xF39C12, 'BZ': 0xF1C40F, 'CX': 0x2E86C1, 'CY': 0x3498DB, 'CZ': 0x85C1E9 };
+                        const colMapXYZ = {
+                            'AX': 0x900C3F, 'AY': 0xC70039, 'AZ': 0xFF5733,
+                            'BX': 0xE67E22, 'BY': 0xF39C12, 'BZ': 0xF1C40F,
+                            'CX': 0x2E86C1, 'CY': 0x3498DB, 'CZ': 0x85C1E9
+                        };
 
                         data.slots.forEach(s => {
                             if (s.ocupado) {
                                 let colHex = colMapABC[s.abc] || 0x3b82f6;
-                                if (modoVista === '9 Zonas (ABC-XYZ)') { colHex = colMapXYZ[s.abc_xyz] || colHex; }
+                                if (modoVista === '9 Zonas (ABC-XYZ)') {
+                                    colHex = colMapXYZ[s.abc_xyz] || colHex;
+                                }
+
+                                let opacidad = 1.0;
+                                let colorFinal = colHex;
                                 
-                                let opacidad = 1.0; let colorFinal = colHex;
-                                if (s.es_mixto) { colorFinal = 0x8b5cf6; } // Morado para Pallets Mixtos
+                                if (s.es_mixto) {
+                                    colorFinal = 0x8b5cf6; // Morado para Pallets Mixtos
+                                }
                                 
-                                if (data.hay_filtro && !s.destacado) { opacidad = 0.10; colorFinal = 0x94a3b8; }
-                                else if (data.hay_filtro && s.destacado) { colHex = 0x22c55e; colorFinal = colHex; }
+                                if (data.hay_filtro && !s.destacado) {
+                                    opacidad = 0.10;
+                                    colorFinal = 0x94a3b8;
+                                } else if (data.hay_filtro && s.destacado) {
+                                    colHex = 0x22c55e;
+                                    colorFinal = colHex;
+                                }
 
                                 const isV = data.is_vertical;
-                                const px = isV ? s.y + 0.05 : s.x; const py = isV ? s.x + 0.05 : s.y + 0.05;
-                                const pW = isV ? data.pp_d - 0.1 : data.ap_w; const pD = isV ? data.ap_w : data.pp_d - 0.1;
+                                const px = isV ? s.y + 0.05 : s.x;
+                                const py = isV ? s.x + 0.05 : s.y + 0.05;
+                                const pW = isV ? data.pp_d - 0.1 : data.ap_w;
+                                const pD = isV ? data.ap_w : data.pp_d - 0.1;
 
-                                const pBaseMesh = new THREE.Mesh(new THREE.BoxGeometry(pW, 0.12, pD), new THREE.MeshStandardMaterial({ color: 0xb88252, roughness: 0.8, transparent: opacidad < 1, opacity: opacidad }));
+                                const pbMat = new THREE.MeshStandardMaterial({ color: 0xb88252, roughness: 0.8, transparent: opacidad < 1, opacity: opacidad });
+                                const pBaseMesh = new THREE.Mesh(new THREE.BoxGeometry(pW, 0.12, pD), pbMat);
                                 pBaseMesh.position.set(px + pW/2, s.z + 0.06, -(py + pD/2));
                                 if (opacidad === 1) { pBaseMesh.castShadow = true; pBaseMesh.receiveShadow = true; }
                                 scene.add(pBaseMesh);
@@ -1130,6 +1256,7 @@ def mostrar_layout():
                                 const h = Math.max(0.3, s.alt_p - 0.12);
                                 const cargoMat = new THREE.MeshStandardMaterial({ color: colorFinal, roughness: 0.5, transparent: opacidad < 1, opacity: opacidad });
                                 let cargoMesh;
+
                                 if (s.es_cilindro) {
                                     const radius = Math.min(pW, pD) / 2.2;
                                     cargoMesh = new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, h, 16), cargoMat);
@@ -1138,6 +1265,7 @@ def mostrar_layout():
                                     cargoMesh = new THREE.Mesh(new THREE.BoxGeometry(pW - 0.05, h, pD - 0.05), cargoMat);
                                     cargoMesh.position.set(px + pW/2, s.z + 0.12 + h/2, -(py + pD/2));
                                 }
+
                                 if (opacidad === 1) { cargoMesh.castShadow = true; cargoMesh.receiveShadow = true; }
                                 
                                 cargoMesh.userData = { id: s.id, sku: s.sku, letra: s.letra, modulo: s.modulo, nivel: s.nivel, zona: modoVista === '9 Zonas (ABC-XYZ)' ? s.abc_xyz : s.abc, alt: s.alt_p, es_mixto: s.es_mixto };
@@ -1153,6 +1281,7 @@ def mostrar_layout():
                             const rect = container.getBoundingClientRect();
                             mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
                             mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                            
                             raycaster.setFromCamera(mouse, camera);
                             const intersects = raycaster.intersectObjects(meshesInteractivos);
                             
@@ -1170,7 +1299,11 @@ def mostrar_layout():
                             }
                         });
 
-                        function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+                        function animate() {
+                            requestAnimationFrame(animate);
+                            controls.update();
+                            renderer.render(scene, camera);
+                        }
                         animate();
                     </script>
                 </body>
@@ -1186,6 +1319,10 @@ def mostrar_analytics():
         return
 
     df_res, MAPA = st.session_state.df_resultados.copy(), st.session_state.mapa_columnas
+    
+    # Aplicar Filtro de Bodega Global
+    if getattr(st.session_state, 'bodegas_sel', []):
+        df_res = df_res[df_res[MAPA['bodega']].isin(st.session_state.bodegas_sel)]
     
     escenario_stock = st.session_state.get("tipo_stock", "Stock Promedio")
     key_stock_eval = "stock_maximo" if escenario_stock == "Stock Máximo" else "stock_promedio"
@@ -1262,6 +1399,10 @@ def mostrar_inbound():
         
     df_res = st.session_state.df_resultados
     mapa = st.session_state.mapa_columnas
+    
+    if getattr(st.session_state, 'bodegas_sel', []):
+        df_res = df_res[df_res[mapa['bodega']].isin(st.session_state.bodegas_sel)]
+        
     skus_disponibles = df_res[mapa['sku']].astype(str).unique().tolist()
     
     col1, col2 = st.columns([1, 2])
@@ -1280,7 +1421,6 @@ def mostrar_inbound():
         pallets_gen = int(math.ceil(cant_in / cap_optima))
         es_crossdock = False
         
-        # Evaluar stock según el escenario actual
         escenario = st.session_state.get("tipo_stock", "Stock Promedio")
         key_stock = "stock_maximo" if escenario == "Stock Máximo" else "stock_promedio"
         col_stock = mapa.get(key_stock, mapa.get("stock", "Stock"))
@@ -1389,7 +1529,6 @@ menu_opciones = [
     "📤 Salida Mercadería",
 ]
 
-# Seguro Anti-Errores
 if st.session_state.menu_seleccion not in menu_opciones:
     st.session_state.menu_seleccion = menu_opciones[0]
 
@@ -1404,6 +1543,25 @@ st.session_state.tipo_stock = st.sidebar.radio(
     ["Stock Promedio", "Stock Máximo"],
     index=["Stock Promedio", "Stock Máximo"].index(st.session_state.get("tipo_stock", "Stock Promedio"))
 )
+
+st.sidebar.markdown("---")
+# FILTRO GLOBAL BODEGA EN SIDEBAR
+if st.session_state.df_resultados is not None:
+    mapa = st.session_state.mapa_columnas
+    df_all = st.session_state.df_resultados
+    col_bod = mapa.get('bodega') if mapa and mapa.get('bodega') else 'Bodega'
+    if col_bod in df_all.columns:
+        opciones_bodega = sorted([str(x) for x in df_all[col_bod].unique() if pd.notna(x) and str(x) != 'nan' and str(x) != 'N/D'])
+        if opciones_bodega:
+            # FIX: Only pre-select if current bodegas_sel are in the list, otherwise use all
+            valid_sel = [b for b in st.session_state.get('bodegas_sel', []) if b in opciones_bodega]
+            if not st.session_state.get('bodegas_sel') and not valid_sel:
+                st.session_state.bodegas_sel = opciones_bodega
+            st.session_state.bodegas_sel = st.sidebar.multiselect(
+                "🏭 Filtrar por Bodega:",
+                options=opciones_bodega,
+                default=st.session_state.bodegas_sel
+            )
 
 st.sidebar.markdown("---")
 st.sidebar.caption("WMS Analytics Hub v8.9 • Dev Branch")
