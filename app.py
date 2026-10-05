@@ -743,107 +743,85 @@ def mostrar_layout():
     df_layout_opt = preparar_df_layout(st.session_state.df_resultados.copy(), MAPA, "OPTIMO")
     dict_demanda = {'Data Original': df_layout_orig, 'Data Optimizada': df_layout_opt}
 
-    col_inf, col_dr, col_op, col_an = st.columns(4)
-    
-    with col_an:
-        st.markdown("<h4 style='color:#8e44ad; margin-top:0;'>🔍 4. Análisis y Filtros</h4>", unsafe_allow_html=True)
-        st.session_state.fuente_datos = st.selectbox('📂 Fuente:', ['Data Original', 'Data Optimizada'], index=['Data Original', 'Data Optimizada'].index(st.session_state.fuente_datos))
-        st.session_state.filtro_sublayout = st.text_area("🔍 Buscador Masivo de SKUs:\nSepara los códigos por comas. Déjalo en 'TODOS' para ver completo.", value=st.session_state.filtro_sublayout, height=70)
-        st.markdown("<b style='font-size:11px; color:#34495e;'>🔠 Zonas ABC a procesar:</b>", unsafe_allow_html=True)
-        cb_a, cb_b, cb_c = st.columns(3)
-        with cb_a: st.session_state.chk_a = st.checkbox('Zona A', value=st.session_state.chk_a)
-        with cb_b: st.session_state.chk_b = st.checkbox('Zona B', value=st.session_state.chk_b)
-        with cb_c: st.session_state.chk_c = st.checkbox('Zona C', value=st.session_state.chk_c)
-        st.markdown("<b style='font-size:10px; color:#34495e; margin-top:5px; display:block;'>CONTROLES DE EVALUACIÓN:</b>", unsafe_allow_html=True)
-        
-        # Filtro Bodega en Layout Panel 4
-        df_fuente_curr = dict_demanda[st.session_state.fuente_datos]
-        if 'Bodega' in df_fuente_curr.columns:
-            opc_bod_lay = sorted([str(x) for x in df_fuente_curr['Bodega'].unique() if pd.notna(x) and str(x) != 'nan' and str(x) != 'N/D'])
-            if opc_bod_lay:
-                bod_default_lay = [b for b in st.session_state.get('bodegas_sel', opc_bod_lay) if b in opc_bod_lay] or opc_bod_lay
-                bod_lay_sel = st.multiselect("🏭 Filtrar por Bodega:", opc_bod_lay, default=bod_default_lay, key="ms_bodega_layout_page")
-                st.session_state.bodegas_sel = bod_lay_sel
-        
+    with st.expander("📦 1. Filtros de Demanda, Slotting y Racks", expanded=True):
+        col_f1, col_f2, col_f3 = st.columns(3)
+        with col_f1:
+            st.session_state.fuente_datos = st.selectbox('📂 Fuente de Datos:', ['Data Original', 'Data Optimizada'], index=['Data Original', 'Data Optimizada'].index(st.session_state.fuente_datos))
+            df_fuente_curr = dict_demanda[st.session_state.fuente_datos]
+            if 'Bodega' in df_fuente_curr.columns:
+                opc_bod_lay = sorted([str(x) for x in df_fuente_curr['Bodega'].unique() if pd.notna(x) and str(x) != 'nan' and str(x) != 'N/D'])
+                if opc_bod_lay:
+                    bod_default_lay = [b for b in st.session_state.get('bodegas_sel', opc_bod_lay) if b in opc_bod_lay] or opc_bod_lay
+                    bod_lay_sel = st.multiselect("🏭 Filtrar por Bodega:", opc_bod_lay, default=bod_default_lay, key="ms_bodega_layout_page")
+                    st.session_state.bodegas_sel = bod_lay_sel
+        with col_f2:
+            st.markdown("<b style='font-size:12px; color:#34495e;'>🔠 Zonas ABC a procesar:</b>", unsafe_allow_html=True)
+            cb_a, cb_b, cb_c = st.columns(3)
+            with cb_a: st.session_state.chk_a = st.checkbox('Zona A', value=st.session_state.chk_a)
+            with cb_b: st.session_state.chk_b = st.checkbox('Zona B', value=st.session_state.chk_b)
+            with cb_c: st.session_state.chk_c = st.checkbox('Zona C', value=st.session_state.chk_c)
+            st.session_state.filtro_sublayout = st.text_input("🔍 Buscador Masivo de SKUs (separar por comas, o 'TODOS'):", value=st.session_state.filtro_sublayout)
+        with col_f3:
+            st.session_state.pallets_viga = st.selectbox('Config. Viga (Pallets por nivel):', [1, 2, 3], index=[1,2,3].index(st.session_state.pallets_viga))
+            st.session_state.peso_max_pallet = st.number_input('Peso Máx. Viga (kg):', value=st.session_state.peso_max_pallet)
+
+    with st.expander("🏢 2. Infraestructura (Bodega, Pilares y Oficinas)", expanded=False):
+        c_inf1, c_inf2, c_inf3 = st.columns(3)
+        with c_inf1:
+            st.markdown("<b style='font-size:12px; color:#34495e;'>DIMENSIONES BODEGA</b>", unsafe_allow_html=True)
+            st.session_state.l_bod = st.number_input('Largo Bodega (m):', value=st.session_state.l_bod)
+            st.session_state.a_bod = st.number_input('Ancho Bodega (m):', value=st.session_state.a_bod)
+            st.session_state.alt_bod = st.number_input('Alto Útil (m):', value=st.session_state.alt_bod)
+        with c_inf2:
+            st.markdown("<b style='font-size:12px; color:#34495e;'>MALLA DE PILARES</b>", unsafe_allow_html=True)
+            st.session_state.cant_pilares_x = st.number_input('Cant. Pilares X (0=Auto):', value=st.session_state.cant_pilares_x)
+            st.session_state.cant_pilares_y = st.number_input('Cant. Pilares Y (0=Auto):', value=st.session_state.cant_pilares_y)
+            st.session_state.dist_pilares_x = st.number_input('Dist. Pilares X (m):', value=st.session_state.dist_pilares_x)
+            st.session_state.dist_pilares_y = st.number_input('Dist. Pilares Y (m):', value=st.session_state.dist_pilares_y)
+        with c_inf3:
+            st.markdown("<b style='font-size:12px; color:#34495e;'>ZONA DE OFICINAS</b>", unsafe_allow_html=True)
+            st.session_state.ofi_pos_x = st.number_input('Pos. Inicio X (m):', value=st.session_state.ofi_pos_x)
+            st.session_state.ofi_pos_y = st.number_input('Pos. Inicio Y (m):', value=st.session_state.ofi_pos_y)
+            st.session_state.ofi_largo = st.number_input('Largo X (m):', value=st.session_state.ofi_largo)
+            st.session_state.ofi_ancho = st.number_input('Ancho Y (m):', value=st.session_state.ofi_ancho)
+            st.session_state.ofi_alto = st.number_input('Alto Z (m):', value=st.session_state.ofi_alto)
+
+    with st.expander("🚜 3. Diseño de Tránsito y Operación", expanded=False):
+        c_op1, c_op2, c_op3 = st.columns(3)
+        with c_op1:
+            st.session_state.tipo_flujo = st.selectbox('Flujo:', ['Ninguno', 'Flujo en U', 'Flujo en I (Línea Recta)', 'Flujo en L'], index=['Ninguno', 'Flujo en U', 'Flujo en I (Línea Recta)', 'Flujo en L'].index(st.session_state.tipo_flujo))
+            st.session_state.ancho_porton = st.number_input('Ancho P. Auto (m):', value=st.session_state.ancho_porton)
+            st.session_state.orientacion_rack = st.selectbox('Orientación:', ['Automática', 'Horizontal (X)', 'Vertical (Y)'], index=['Automática', 'Horizontal (X)', 'Vertical (Y)'].index(st.session_state.orientacion_rack))
+            st.session_state.alt_grua = st.number_input('Alt. Máx. Grúa (m):', value=st.session_state.alt_grua)
+        with c_op2:
+            st.session_state.pasillo = st.number_input('Ancho Pasillo (m):', value=st.session_state.pasillo)
+            st.session_state.cant_pas_trans = st.number_input('Pasillos Trans.:', value=st.session_state.cant_pas_trans)
+            st.session_state.ancho_pas_trans = st.number_input('Ancho P. Trans. (m):', value=st.session_state.ancho_pas_trans)
+            st.session_state.peso_max_grua = st.number_input('Cap. Grúa (kg):', value=st.session_state.peso_max_grua)
+        with c_op3:
+            st.markdown("<b style='font-size:12px; color:#34495e;'>ACCESOS EXTRA</b>", unsafe_allow_html=True)
+            p1, p2 = st.columns(2)
+            with p1:
+                st.session_state.cant_ptas_norte = st.number_input('Ptas Norte:', value=st.session_state.cant_ptas_norte)
+                st.session_state.cant_ptas_sur = st.number_input('Ptas Sur:', value=st.session_state.cant_ptas_sur)
+                st.session_state.cant_ptas_este = st.number_input('Ptas Este:', value=st.session_state.cant_ptas_este)
+                st.session_state.cant_ptas_oeste = st.number_input('Ptas Oeste:', value=st.session_state.cant_ptas_oeste)
+            with p2:
+                st.session_state.w_ptas_norte = st.number_input('Ancho N:', value=st.session_state.w_ptas_norte)
+                st.session_state.w_ptas_sur = st.number_input('Ancho S:', value=st.session_state.w_ptas_sur)
+                st.session_state.w_ptas_este = st.number_input('Ancho E:', value=st.session_state.w_ptas_este)
+                st.session_state.w_ptas_oeste = st.number_input('Ancho O:', value=st.session_state.w_ptas_oeste)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    c_btn1, c_btn2, c_btn3 = st.columns(3)
+    with c_btn1:
         st.session_state.racks_en_pared = st.toggle("🧱 ¿Primer rack pegado a la pared?", value=st.session_state.get('racks_en_pared', False))
         st.session_state.consolidar_saldos = st.toggle("🧩 Consolidar Saldos (Pallets Mixtos)", value=st.session_state.get('consolidar_saldos', False))
-        
+    with c_btn2:
         btn_crear_sel = st.button("🎯 Buscar / Crear Layout", type="primary", use_container_width=True)
         btn_crear_gen = st.button("🏢 Mostrar Toda la Bodega", use_container_width=True)
+    with c_btn3:
         btn_propuesta = st.button("🧠 Propuesta Espacial IA", use_container_width=True)
-
-    with col_inf:
-        st.markdown("<h4 style='color:#2980b9; margin-top:0;'>🏢 1. Infraestructura</h4>", unsafe_allow_html=True)
-        st.session_state.l_bod = st.number_input('Largo Bodega (m):', value=st.session_state.l_bod)
-        st.session_state.a_bod = st.number_input('Ancho Bodega (m):', value=st.session_state.a_bod)
-        st.session_state.alt_bod = st.number_input('Alto Útil (m):', value=st.session_state.alt_bod)
-        st.markdown("<b style='color:#7f8c8d; font-size:11px;'>MALLA DE PILARES</b>", unsafe_allow_html=True)
-        st.session_state.cant_pilares_x = st.number_input('Cant. Pilares X (0=Auto):', value=st.session_state.cant_pilares_x)
-        st.session_state.cant_pilares_y = st.number_input('Cant. Pilares Y (0=Auto):', value=st.session_state.cant_pilares_y)
-        st.session_state.dist_pilares_x = st.number_input('Dist. Pilares X (m):', value=st.session_state.dist_pilares_x)
-        st.session_state.dist_pilares_y = st.number_input('Dist. Pilares Y (m):', value=st.session_state.dist_pilares_y)
-        st.markdown("<b style='color:#7f8c8d; font-size:11px;'>🏢 ZONA DE OFICINAS</b>", unsafe_allow_html=True)
-        st.session_state.ofi_pos_x = st.number_input('Pos. Inicio X (m):', value=st.session_state.ofi_pos_x)
-        st.session_state.ofi_pos_y = st.number_input('Pos. Inicio Y (m):', value=st.session_state.ofi_pos_y)
-        st.session_state.ofi_largo = st.number_input('Largo X (m):', value=st.session_state.ofi_largo)
-        st.session_state.ofi_ancho = st.number_input('Ancho Y (m):', value=st.session_state.ofi_ancho)
-        st.session_state.ofi_alto = st.number_input('Alto Z (m):', value=st.session_state.ofi_alto)
-
-    with col_op:
-        st.markdown("<h4 style='color:#e67e22; margin-top:0;'>🚜 3. Operación</h4>", unsafe_allow_html=True)
-        st.markdown("<b style='color:#7f8c8d; font-size:11px;'>DISEÑO DE TRÁNSITO</b>", unsafe_allow_html=True)
-        st.session_state.tipo_flujo = st.selectbox('Flujo:', ['Ninguno', 'Flujo en U', 'Flujo en I (Línea Recta)', 'Flujo en L'], index=['Ninguno', 'Flujo en U', 'Flujo en I (Línea Recta)', 'Flujo en L'].index(st.session_state.tipo_flujo))
-        st.session_state.ancho_porton = st.number_input('Ancho P. Auto (m):', value=st.session_state.ancho_porton)
-        st.session_state.orientacion_rack = st.selectbox('Orientación:', ['Automática', 'Horizontal (X)', 'Vertical (Y)'], index=['Automática', 'Horizontal (X)', 'Vertical (Y)'].index(st.session_state.orientacion_rack))
-        st.session_state.pasillo = st.number_input('Ancho Pasillo (m):', value=st.session_state.pasillo)
-        st.session_state.cant_pas_trans = st.number_input('Pasillos Trans.:', value=st.session_state.cant_pas_trans)
-        st.session_state.ancho_pas_trans = st.number_input('Ancho P. Trans. (m):', value=st.session_state.ancho_pas_trans)
-        st.markdown("<b style='color:#d35400; font-size:11px;'>RESTRICCIONES FÍSICAS</b>", unsafe_allow_html=True)
-        st.session_state.alt_grua = st.number_input('Alt. Máx. Grúa (m):', value=st.session_state.alt_grua)
-        st.session_state.peso_max_grua = st.number_input('Cap. Grúa (kg):', value=st.session_state.peso_max_grua)
-        st.markdown("<b style='color:#7f8c8d; font-size:11px;'>ACCESOS EXTRA</b>", unsafe_allow_html=True)
-        c_p1, c_p2 = st.columns(2)
-        with c_p1:
-            st.session_state.cant_ptas_norte = st.number_input('Ptas Norte:', value=st.session_state.cant_ptas_norte)
-            st.session_state.cant_ptas_sur = st.number_input('Ptas Sur:', value=st.session_state.cant_ptas_sur)
-            st.session_state.cant_ptas_este = st.number_input('Ptas Este:', value=st.session_state.cant_ptas_este)
-            st.session_state.cant_ptas_oeste = st.number_input('Ptas Oeste:', value=st.session_state.cant_ptas_oeste)
-        with c_p2:
-            st.session_state.w_ptas_norte = st.number_input('Ancho N:', value=st.session_state.w_ptas_norte)
-            st.session_state.w_ptas_sur = st.number_input('Ancho S:', value=st.session_state.w_ptas_sur)
-            st.session_state.w_ptas_este = st.number_input('Ancho E:', value=st.session_state.w_ptas_este)
-            st.session_state.w_ptas_oeste = st.number_input('Ancho O:', value=st.session_state.w_ptas_oeste)
-
-    with col_dr:
-        st.markdown("<h4 style='color:#27ae60; margin-top:0;'>📦 2. Slotting y Racks</h4>", unsafe_allow_html=True)
-        df_fuente_curr = dict_demanda['Data Original'] if st.session_state.fuente_datos == 'Data Original' else dict_demanda['Data Optimizada']
-        
-        clases_sel_box = []
-        if st.session_state.chk_a: clases_sel_box.append('A')
-        if st.session_state.chk_b: clases_sel_box.append('B')
-        if st.session_state.chk_c: clases_sel_box.append('C')
-        df_fuente_curr = df_fuente_curr[df_fuente_curr['ABC'].isin(clases_sel_box)]
-        
-        # Filtro de Bodega Visual
-        if getattr(st.session_state, 'bodegas_sel', []):
-            df_fuente_curr = df_fuente_curr[df_fuente_curr['Bodega'].isin(st.session_state.bodegas_sel)]
-        
-        raw_f_box = st.session_state.filtro_sublayout.strip()
-        if raw_f_box and raw_f_box.upper() != 'TODOS':
-            skus_f_box = set(s.strip().upper() for s in re.split(r'[,\s;]+', raw_f_box) if s.strip())
-            if skus_f_box:
-                df_fuente_curr = df_fuente_curr[df_fuente_curr['SKU'].astype(str).str.upper().isin(skus_f_box)]
-        
-        tot_p_fuente = df_fuente_curr['Cantidad_Pallets'].sum()
-        zona_a = df_fuente_curr[df_fuente_curr['ABC']=='A']['Cantidad_Pallets'].sum()
-        zona_b = df_fuente_curr[df_fuente_curr['ABC']=='B']['Cantidad_Pallets'].sum()
-        zona_c = df_fuente_curr[df_fuente_curr['ABC']=='C']['Cantidad_Pallets'].sum()
-        
-        st.markdown(f"<div style='background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:12px; font-size:12px; font-family:monospace; margin-bottom:12px;'><b style='color:#27ae60;'>✅ REPORTE CUBICADORA OK</b><br><b>Total a Ubicar:</b> {tot_p_fuente:,.0f} Pallets<br><span style='color:#e74c3c;'>🔹 Zona A: {zona_a:,.0f} pal</span><br><span style='color:#e67e22;'>🔹 Zona B: {zona_b:,.0f} pal</span><br><span style='color:#3498db;'>🔹 Zona C: {zona_c:,.0f} pal</span></div>", unsafe_allow_html=True)
-        
-        st.markdown("<b style='color:#7f8c8d; font-size:11px;'>ESTRUCTURA RACK</b>", unsafe_allow_html=True)
-        st.session_state.pallets_viga = st.selectbox('Config. Viga:', [1, 2, 3], index=[1,2,3].index(st.session_state.pallets_viga))
-        st.session_state.peso_max_pallet = st.number_input('Peso Máx. Viga (kg):', value=st.session_state.peso_max_pallet)
         st.session_state.oficinas = [{'x': st.session_state.ofi_pos_x, 'y': st.session_state.ofi_pos_y, 'w': st.session_state.ofi_largo, 'd': st.session_state.ofi_ancho, 'h': st.session_state.ofi_alto}] if st.session_state.ofi_largo > 0 else []
 
     if btn_crear_sel:
@@ -910,23 +888,43 @@ def mostrar_layout():
         st.session_state.res_layout_actual = res_box
 
         dif = res_box['diferencia']
-        s_bg, s_color = ("#ecfdf5", "#065f46") if dif >= 0 else ("#fef2f2", "#991b1b")
+        s_bg = "#0f172a"
+        s_color = "#10b981" if dif >= 0 else "#ef4444"
         msg_txt = f"✔️ ¡ÉXITO! Caben todos y sobran {dif:,}." if dif >= 0 else f"⚠️ ¡ALERTA! Te faltan {abs(dif):,} posiciones."
 
-        html_eval = clean_html(f"""<div style='margin:15px auto; max-width:450px; border:2px solid {s_color}; border-radius:8px; background:{s_bg}; padding:12px; font-family:system-ui, sans-serif; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
-<div style='color:#0f172a; font-weight:900; font-size:13px; margin-bottom:4px; text-align:center; text-transform:uppercase;'>📊 Evaluación de Capacidad</div>
-<div style='color:#475569; font-size:11px; text-align:center; margin-bottom:8px;'>Zonas Evaluadas: <b>{','.join(clases_sel)}</b></div>
-<div style='color:{s_color}; font-weight:bold; font-size:12px; margin-bottom:12px; text-align:center; padding: 4px; background: rgba(255,255,255,0.5); border-radius:4px;'>{msg_txt}</div>
-<div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 4px;'><span><b>Racks en Planta:</b></span><span>{res_box['modulos']:,} mód.</span></div>
-<div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 8px;'><span><b>Niveles en Altura:</b></span><span>{res_box['niveles']} niv.</span></div>
-<div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 4px; border-top:1px solid #cbd5e1; padding-top:6px;'><span><b>Capacidad Total Racks:</b></span><span style='font-weight:bold;'>{res_box['capacidad']:,} pal</span></div>
-<div style='display:flex; justify-content: space-between; font-size:12px; color:#334155; margin-bottom: 4px;'><span><b>Pallets Almacenados (3D):</b></span><span style='font-weight:900; color:#0284c7;'>{res_box['pallets_ubicados_totales']:,} pal</span></div>
-<div style='display:flex; justify-content: space-between; font-size:12px; color:#334155;'><span><b>Demanda Solicitada:</b></span><span style='font-weight:bold;'>{res_box['demanda']:,} pal</span></div>
-</div>""")
+        html_eval = clean_html(f"""
+        <div style="font-family: 'Segoe UI', system-ui, sans-serif; background: #0f172a; border-radius: 12px 12px 0 0; padding: 18px 25px; display: flex; justify-content: space-between; align-items: center; margin-top: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <div><h3 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.5px;">🏗️ Evaluación de Capacidad del Layout</h3><p style="color: #94a3b8; margin: 3px 0 0 0; font-size: 12px;">Zonas Evaluadas: <b style="color:#38bdf8;">{','.join(clases_sel)}</b></p></div>
+            <div><span style="background: {'#ecfdf5' if dif >= 0 else '#fef2f2'}; color: {'#065f46' if dif >= 0 else '#991b1b'}; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; border: 1px solid {'#10b981' if dif >= 0 else '#ef4444'};">{msg_txt}</span></div>
+        </div>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px; padding: 20px 25px; margin-bottom: 20px;">
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px;">
+                <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:4px solid #3b82f6; border-radius:8px; padding:15px; text-align:center;">
+                    <div style="font-size:10px; font-weight:800; color:#64748b; letter-spacing:0.5px; margin-bottom:4px;">RACKS EN PLANTA</div>
+                    <div style="font-size:24px; font-weight:800; color:#0f172a;">{res_box['modulos']:,}</div>
+                </div>
+                <div style="background:#ffffff; border:1px solid #e2e8f0; border-left:4px solid #10b981; border-radius:8px; padding:15px; text-align:center;">
+                    <div style="font-size:10px; font-weight:800; color:#64748b; letter-spacing:0.5px; margin-bottom:4px;">NIVELES EN ALTURA</div>
+                    <div style="font-size:24px; font-weight:800; color:#0f172a;">{res_box['niveles']}</div>
+                </div>
+                <div style="background:#f5f3ff; border:1px solid #ddd6fe; border-left:4px solid #6366f1; border-radius:8px; padding:15px; text-align:center;">
+                    <div style="font-size:10px; font-weight:800; color:#4338ca; letter-spacing:0.5px; margin-bottom:4px;">CAPACIDAD TOTAL</div>
+                    <div style="font-size:24px; font-weight:800; color:#4f46e5;">{res_box['capacidad']:,}</div>
+                </div>
+                <div style="background:#f5f3ff; border:1px solid #ddd6fe; border-left:4px solid #8b5cf6; border-radius:8px; padding:15px; text-align:center;">
+                    <div style="font-size:10px; font-weight:800; color:#5b21b6; letter-spacing:0.5px; margin-bottom:4px;">ALMACENADOS 3D</div>
+                    <div style="font-size:24px; font-weight:800; color:#7c3aed;">{res_box['pallets_ubicados_totales']:,}</div>
+                </div>
+                <div style="background:{'#fef2f2' if dif < 0 else '#ffffff'}; border:1px solid {'#fecaca' if dif < 0 else '#e2e8f0'}; border-left:4px solid {'#ef4444' if dif < 0 else '#f59e0b'}; border-radius:8px; padding:15px; text-align:center;">
+                    <div style="font-size:10px; font-weight:800; color:{'#991b1b' if dif < 0 else '#b45309'}; letter-spacing:0.5px; margin-bottom:4px;">DEMANDA EVALUADA</div>
+                    <div style="font-size:24px; font-weight:800; color:{'#dc2626' if dif < 0 else '#d97706'};">{res_box['demanda']:,}</div>
+                </div>
+            </div>
+        </div>
+        """)
         st.markdown(html_eval, unsafe_allow_html=True)
 
     if st.session_state.layout_generado and st.session_state.res_layout_actual is not None:
-        st.markdown("---")
         res = st.session_state.res_layout_actual
         
         col_exp1, col_exp2 = st.columns([1, 1])
@@ -1553,7 +1551,6 @@ if st.session_state.df_resultados is not None:
     if col_bod in df_all.columns:
         opciones_bodega = sorted([str(x) for x in df_all[col_bod].unique() if pd.notna(x) and str(x) != 'nan' and str(x) != 'N/D'])
         if opciones_bodega:
-            # FIX: Only pre-select if current bodegas_sel are in the list, otherwise use all
             valid_sel = [b for b in st.session_state.get('bodegas_sel', []) if b in opciones_bodega]
             if not st.session_state.get('bodegas_sel') and not valid_sel:
                 st.session_state.bodegas_sel = opciones_bodega
