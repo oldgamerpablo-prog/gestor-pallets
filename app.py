@@ -42,7 +42,8 @@ parametros_layout = {
     "cant_ptas_sur": 0, "w_ptas_sur": 6.0, "cant_ptas_este": 0, "w_ptas_este": 6.0,
     "cant_ptas_oeste": 0, "w_ptas_oeste": 6.0, "fuente_datos": "Data Original",
     "filtro_sublayout": "TODOS", "chk_a": True, "chk_b": True, "chk_c": True,
-    "consolidar_saldos": False, "modo_vista_color": "3 Zonas (ABC)", "racks_en_pared": False
+    "consolidar_saldos": False, "modo_vista_color": "3 Zonas (ABC)", "racks_en_pared": False,
+    "forma_pilar": "Cuadrado / Rectangular", "pilar_largo": 0.5, "pilar_ancho": 0.5
 }
 for k, v in parametros_layout.items():
     if k not in st.session_state: st.session_state[k] = v
@@ -432,6 +433,9 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
     if pegar_pared and (y_cursor + pp_d <= v_a):
         filas_y.append([(y_cursor, 'A')])
     
+    p_l = conf.get('pilar_largo', 0.5)
+    p_a = conf.get('pilar_ancho', 0.5)
+    
     m_v, m_l, alm = 0, [] , []
     for f, lados in enumerate(filas_y):
         l_pas = chr(64 + f + 1) if f+1 <= 26 else f"P{f+1}"
@@ -443,7 +447,8 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
                 for yr, lado in lados:
                     rx1, ry1, rx2, ry2 = (yr, xp, yr+pp_d, xp+l_mod) if is_vertical else (xp, yr, xp+l_mod, yr+pp_d)
                     if any(not (rx2+1.5<o['x'] or rx1-1.5>o['x']+o['w'] or ry2+1.5<o['y'] or ry1-1.5>o['y']+o['d']) for o in conf.get('oficinas', [])) or any(not (rx2<z['x1'] or rx1>z['x2'] or ry2<z['y1'] or ry1>z['y2']) for z in sz): continue
-                    b_p = any(xp - 0.25 <= px <= xp + l_mod + 0.25 and yr - 0.25 <= py <= yr + pp_d + 0.25 for px, py in v_pil)
+                    
+                    b_p = any(xp - p_l/2 <= px <= xp + l_mod + p_l/2 and yr - p_a/2 <= py <= yr + pp_d + p_a/2 for px, py in v_pil)
                     m_l.append({'x': xp, 'y': yr, 'bloqueado': b_p})
                     if not b_p: 
                         m_v += 1
@@ -507,7 +512,7 @@ def motor_calculo_layout(df_activa, is_vertical, pal_v, conf):
                 break
 
     demanda_total = int(df_activa["Cantidad_Pallets"].sum()) if not conf.get("consolidar_saldos", False) else len(pallets_a_ubicar)
-    return {"modulos": m_v, "niveles": niv, "capacidad": len(alm), "demanda": demanda_total, "diferencia": len(alm) - demanda_total, "staging": sz, "oficinas": conf.get("oficinas", []), "modulos_list": m_l, "almacen": alm, "pilares_reales": pil_r, "pallets_ubicados_totales": u, "alt_nivel_viga": a_n_v, "l_modulo": l_mod, "t_marco": t_m, "pp_d": pp_d, "ap_w": ap_w, "viga_h": 0.12, "is_vertical": is_vertical}
+    return {"modulos": m_v, "niveles": niv, "capacidad": len(alm), "demanda": demanda_total, "diferencia": len(alm) - demanda_total, "staging": sz, "oficinas": conf.get("oficinas", []), "modulos_list": m_l, "almacen": alm, "pilares_reales": pil_r, "pallets_ubicados_totales": u, "alt_nivel_viga": a_n_v, "l_modulo": l_mod, "t_marco": t_m, "pp_d": pp_d, "ap_w": ap_w, "viga_h": 0.12, "is_vertical": is_vertical, "forma_pilar": conf.get("forma_pilar", "Cuadrado / Rectangular"), "pilar_largo": p_l, "pilar_ancho": p_a}
 
 # ============================================================
 # 5. PÁGINAS Y NAVEGACIÓN
@@ -778,6 +783,15 @@ def mostrar_layout():
             st.session_state.cant_pilares_y = st.number_input('Cant. Pilares Y (0=Auto):', value=st.session_state.cant_pilares_y)
             st.session_state.dist_pilares_x = st.number_input('Dist. Pilares X (m):', value=st.session_state.dist_pilares_x)
             st.session_state.dist_pilares_y = st.number_input('Dist. Pilares Y (m):', value=st.session_state.dist_pilares_y)
+            st.markdown("<b style='font-size:11px; color:#7f8c8d; margin-top:10px; display:block;'>DIMENSIONES DE PILARES</b>", unsafe_allow_html=True)
+            st.session_state.forma_pilar = st.selectbox('Formato Pilar:', ['Cuadrado / Rectangular', 'Circular'], index=['Cuadrado / Rectangular', 'Circular'].index(st.session_state.forma_pilar))
+            if st.session_state.forma_pilar == 'Circular':
+                st.session_state.pilar_largo = st.number_input('Diámetro Pilar (m):', value=st.session_state.pilar_largo)
+                st.session_state.pilar_ancho = st.session_state.pilar_largo
+            else:
+                cp1, cp2 = st.columns(2)
+                with cp1: st.session_state.pilar_largo = st.number_input('Largo X (m):', value=st.session_state.pilar_largo)
+                with cp2: st.session_state.pilar_ancho = st.number_input('Ancho Y (m):', value=st.session_state.pilar_ancho)
         with c_inf3:
             st.markdown("<b style='font-size:12px; color:#34495e;'>ZONA DE OFICINAS</b>", unsafe_allow_html=True)
             st.session_state.ofi_pos_x = st.number_input('Pos. Inicio X (m):', value=st.session_state.ofi_pos_x)
@@ -971,8 +985,15 @@ def mostrar_layout():
             else: path_free.append(path)
 
         for px, py in res['pilares_reales']:
-            rx0, ry0, rx1, ry1 = px-0.25, py-0.25, px+0.25, py+0.25
-            path_pil.append(f"M {rx0} {ry0} L {rx1} {ry0} L {rx1} {ry1} L {rx0} {ry1} Z")
+            if res.get('forma_pilar') == 'Circular':
+                # Adding a small circle approximation using path or just a circle shape
+                r_p = res['pilar_largo'] / 2.0
+                fig_2d.add_shape(type="circle", x0=px-r_p, y0=py-r_p, x1=px+r_p, y1=py+r_p, fillcolor="#e74c3c", line=dict(color="#c0392b", width=1.5))
+            else:
+                lx = res.get('pilar_largo', 0.5) / 2.0
+                ly = res.get('pilar_ancho', 0.5) / 2.0
+                rx0, ry0, rx1, ry1 = px-lx, py-ly, px+lx, py+ly
+                path_pil.append(f"M {rx0} {ry0} L {rx1} {ry0} L {rx1} {ry1} L {rx0} {ry1} Z")
 
         if path_free: fig_2d.add_shape(type="path", path=" ".join(path_free), fillcolor="#ecf0f1", line=dict(color="#bdc3c7", width=1))
         if path_block: fig_2d.add_shape(type="path", path=" ".join(path_block), fillcolor="#95a5a6", line=dict(color="#7f8c8d", width=1))
@@ -1018,7 +1039,10 @@ def mostrar_layout():
                     "slots": [{"id": s["id_posicion"], "x": s["x_pal"], "y": s["y"], "z": s["z"], "sku": s.get("sku", ""), "abc": s.get("abc", "C"), "abc_xyz": s.get("abc_xyz", "CZ"), "ocupado": s["ocupado"], "es_cilindro": s.get("es_cilindro", False), "es_saldo": s.get("es_saldo", False), "es_mixto": s.get("es_mixto", False), "alt_p": s.get("alt_p", 1.2), "destacado": True if not skus_b else (s.get("sku", "").upper() in skus_b), "letra": s["letra_pasillo"], "modulo": s["modulo"], "nivel": s["nivel"]} for s in res["almacen"]],
                     "racks": [{"x": m["x"], "y": m["y"], "bloqueado": m["bloqueado"]} for m in res["modulos_list"]],
                     "pilares": res["pilares_reales"], "oficinas": res["oficinas"], "staging": res["staging"], "puertas": puertas,
-                    "hay_filtro": len(skus_b) > 0 if skus_b else False
+                    "hay_filtro": len(skus_b) > 0 if skus_b else False,
+                    "forma_pilar": res.get("forma_pilar", "Cuadrado / Rectangular"),
+                    "pilar_largo": res.get("pilar_largo", 0.5),
+                    "pilar_ancho": res.get("pilar_ancho", 0.5)
                 }
                 json_data = json.dumps(datos_bodega)
                 html_template = """
@@ -1106,7 +1130,12 @@ def mostrar_layout():
                         const pilMat = new THREE.MeshStandardMaterial({ color: 0xdc2626, roughness: 0.3 });
                         data.pilares.forEach(p => {
                             if (p[0] <= data.largo && p[1] <= data.ancho) {
-                                const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, data.alto, 0.5), pilMat);
+                                let mesh;
+                                if (data.forma_pilar === 'Circular') {
+                                    mesh = new THREE.Mesh(new THREE.CylinderGeometry(data.pilar_largo/2, data.pilar_largo/2, data.alto, 16), pilMat);
+                                } else {
+                                    mesh = new THREE.Mesh(new THREE.BoxGeometry(data.pilar_largo, data.alto, data.pilar_ancho), pilMat);
+                                }
                                 mesh.position.set(p[0], data.alto/2, -p[1]);
                                 mesh.castShadow = true;
                                 scene.add(mesh);
