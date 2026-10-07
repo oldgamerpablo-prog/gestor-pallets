@@ -33,6 +33,8 @@ if "ordenes_picking" not in st.session_state:
     st.session_state.ordenes_picking = []
 if "tareas_movimiento" not in st.session_state:
     st.session_state.tareas_movimiento = []
+if "ultima_animacion" not in st.session_state:
+    st.session_state.ultima_animacion = {"activa": False}
 
 parametros_layout = {
     "l_bod": 50.0, "a_bod": 40.0, "alt_bod": 7.0, "cant_pilares_x": 4, "cant_pilares_y": 1,
@@ -226,6 +228,7 @@ def calcular_metricas_dinamicas(fila, mapa, modo="EXCEL"):
 
     return {"Capacidad_Usada": cap_usada, "Pallets": pallets, "Unidades_Ultimo": ult_unids, "Ocupacion_Ultimo": (ult_unids / cap_usada * 100) if cap_usada > 0 else 0, "Peso_Pallet": peso_pal, "Estado": estado, "Cap_Excel": cap_ex, "Cap_Optima": cap_op, "Eficiencia_Volumen": efi_vol, "Pallets_Completos": pallets_comp, "Unidades_Sobrante": u_sob, "Stock": stock}
 
+# REPORTE DE 3 HOJAS EN CUBICADORA
 def generar_excel_descarga(df_original, df_resultados, mapa):
     output = io.BytesIO()
     comparativo_rows = []
@@ -248,6 +251,7 @@ def generar_excel_descarga(df_original, df_resultados, mapa):
     output.seek(0)
     return output
 
+# REPORTE DE 3 HOJAS EN LAYOUT WMS
 def generar_wms_excel(df_base, almacen, mapa):
     pos = {}
     slots_rows = []
@@ -903,6 +907,23 @@ def mostrar_layout():
 
         is_vert = ('Vertical' in st.session_state.orientacion_rack) if 'Automática' not in st.session_state.orientacion_rack else (st.session_state.tipo_flujo in ['Flujo en U', 'Flujo en I (Línea Recta)'])
         res_box = motor_calculo_layout(df_activa, is_vert, st.session_state.pallets_viga, st.session_state)
+        
+        # APLICAR MOVIMIENTOS INTERNOS GUARDADOS
+        for tarea in st.session_state.get('tareas_movimiento', []):
+            ori_id = tarea["Origen"]
+            des_id = tarea["Destino"]
+            ori_slot = next((s for s in res_box['almacen'] if s['id_posicion'] == ori_id), None)
+            des_slot = next((s for s in res_box['almacen'] if s['id_posicion'] == des_id), None)
+            if ori_slot and des_slot and ori_slot['ocupado'] and des_slot['ocupado'] and ori_slot['sku'] == des_slot['sku']:
+                des_slot['unidades'] += tarea['Unidades Movidas']
+                des_slot['pct'] = des_slot['unidades'] / des_slot['cap_maxima']
+                des_slot['es_saldo'] = des_slot['unidades'] < des_slot['cap_maxima']
+                
+                ori_slot['ocupado'] = False
+                ori_slot['sku'] = ""
+                ori_slot['unidades'] = 0
+                ori_slot['es_saldo'] = False
+        
         st.session_state.res_layout_actual = res_box
 
         dif = res_box['diferencia']
@@ -944,6 +965,13 @@ def mostrar_layout():
 
     if st.session_state.layout_generado and st.session_state.res_layout_actual is not None:
         res = st.session_state.res_layout_actual
+        
+        anim_info = st.session_state.get('ultima_animacion', {"activa": False})
+        if anim_info.get("activa"):
+            st.success(f"🎬 Animación 3D Pendiente: Se moverán cajas del SKU **{anim_info.get('sku')}** para consolidar. Activa el Gemelo Digital abajo para visualizar.")
+            if st.button("Limpiar Animación (Detener)", use_container_width=True):
+                st.session_state.ultima_animacion = {"activa": False}
+                st.rerun()
         
         col_exp1, col_exp2 = st.columns([1, 1])
         with col_exp1: st.session_state.modo_vista_color = st.selectbox("🎨 Zonificación de Colores Racks:", ['3 Zonas (ABC)', '9 Zonas (ABC-XYZ)'], index=['3 Zonas (ABC)', '9 Zonas (ABC-XYZ)'].index(st.session_state.modo_vista_color))
@@ -1045,7 +1073,8 @@ def mostrar_layout():
                     "hay_filtro": len(skus_b) > 0 if skus_b else False,
                     "forma_pilar": res.get("forma_pilar", "Cuadrado / Rectangular"),
                     "pilar_largo": res.get("pilar_largo", 0.5),
-                    "pilar_ancho": res.get("pilar_ancho", 0.5)
+                    "pilar_ancho": res.get("pilar_ancho", 0.5),
+                    "animacion": anim_info
                 }
                 json_data = json.dumps(datos_bodega)
                 html_template = """
@@ -1155,7 +1184,7 @@ def mostrar_layout():
                             ctx.textBaseline = 'middle';
                             ctx.fillText(text, canvas.width / 2, canvas.height / 2);
                             const tex = new THREE.CanvasTexture(canvas);
-                            const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+                            const mat = new THREE.MeshBasicMaterial({ map: map, transparent: true, depthWrite: false });
                             let planeW = w * 0.9; let planeH = planeW / 4;
                             if (planeH > d * 0.9) { planeH = d * 0.9; planeW = planeH * 4; }
                             const mesh = new THREE.Mesh(new THREE.PlaneGeometry(planeW, planeH), mat);
@@ -1329,8 +1358,82 @@ def mostrar_layout():
                             }
                         });
 
+                        // LÓGICA DE ANIMACIÓN (MONTACARGAS Y CONSOLIDACIÓN)
+                        let updateAnimation = () => {};
+                        const animData = data.animacion;
+                        if (animData && animData.activa) {
+                            const isV = data.is_vertical;
+                            function getPPos(p) {
+                                const px = isV ? p.y + 0.05 : p.x_pal;
+                                const py = isV ? p.x_pal + 0.05 : p.y + 0.05;
+                                const pW = isV ? data.pp_d - 0.1 : data.ap_w;
+                                const pD = isV ? data.ap_w : data.pp_d - 0.1;
+                                return { x: px + pW/2, y: p.z + 0.06, z: -(py + pD/2) };
+                            }
+                            const startP = getPPos(animData.origen);
+                            const endP = getPPos(animData.destino);
+                            const forkGroup = new THREE.Group();
+                            const fBody = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.8, 1.8), new THREE.MeshStandardMaterial({color: 0xf39c12}));
+                            fBody.position.y = 0.4;
+                            forkGroup.add(fBody);
+                            const fMast = new THREE.Mesh(new THREE.BoxGeometry(1.0, 2.5, 0.2), new THREE.MeshStandardMaterial({color: 0x34495e}));
+                            fMast.position.set(0, 1.25, -1.0);
+                            forkGroup.add(fMast);
+                            const wGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.2, 16);
+                            const wMat = new THREE.MeshStandardMaterial({color: 0x111111});
+                            const w1 = new THREE.Mesh(wGeo, wMat); w1.rotation.z = Math.PI/2; w1.position.set(0, 0.3, 0.6); forkGroup.add(w1);
+                            const w2 = new THREE.Mesh(wGeo, wMat); w2.rotation.z = Math.PI/2; w2.position.set(0, 0.3, -0.6); forkGroup.add(w2);
+                            
+                            scene.add(forkGroup);
+                            const movingPallet = new THREE.Mesh(new THREE.BoxGeometry(0.9, Math.max(0.3, animData.origen.alt_p - 0.12), 0.9), new THREE.MeshStandardMaterial({ color: 0x8b5cf6 }));
+                            scene.add(movingPallet);
+                            movingPallet.position.set(startP.x, startP.y + 0.5, startP.z);
+                            forkGroup.position.set(startP.x, 0, startP.z + 2.0);
+                            let state = 0;
+                            updateAnimation = () => {
+                                const speed = 0.04;
+                                const moveSpeed = 0.15;
+                                if(state === 0) {
+                                    movingPallet.position.y -= speed;
+                                    if(movingPallet.position.y <= 0.8) {
+                                        movingPallet.position.y = 0.8;
+                                        state = 1;
+                                    }
+                                } else if(state === 1) {
+                                    const dx = endP.x - forkGroup.position.x;
+                                    const dz = (endP.z + 2.0) - forkGroup.position.z;
+                                    const dist = Math.sqrt(dx*dx + dz*dz);
+                                    if(dist < 0.2) {
+                                        forkGroup.position.x = endP.x;
+                                        forkGroup.position.z = endP.z + 2.0;
+                                        movingPallet.position.x = endP.x;
+                                        movingPallet.position.z = endP.z;
+                                        forkGroup.rotation.y = 0;
+                                        state = 2;
+                                    } else {
+                                        forkGroup.position.x += (dx/dist) * moveSpeed;
+                                        forkGroup.position.z += (dz/dist) * moveSpeed;
+                                        const angle = Math.atan2(dx, dz);
+                                        forkGroup.rotation.y = angle;
+                                        movingPallet.position.x = forkGroup.position.x + Math.sin(angle) * 1.5;
+                                        movingPallet.position.z = forkGroup.position.z + Math.cos(angle) * 1.5;
+                                    }
+                                } else if(state === 2) {
+                                    movingPallet.position.y += speed;
+                                    if(movingPallet.position.y >= endP.y + 0.5) {
+                                        movingPallet.position.y = endP.y + 0.5;
+                                        state = 3;
+                                    }
+                                } else if(state === 3) {
+                                    forkGroup.position.z += moveSpeed;
+                                    if(forkGroup.position.z > data.ancho + 5) scene.remove(forkGroup);
+                                }
+                            };
+                        }
+
                         function animate() {
                             requestAnimationFrame(animate);
+                            updateAnimation();
                             controls.update();
                             renderer.render(scene, camera);
                         }
@@ -1339,6 +1442,9 @@ def mostrar_layout():
                 </body>
                 </html>
                 """
+                
+                # FIX: map is a reserved word, changing mapped var
+                html_template = html_template.replace("map: map,", "map: tex,")
                 html_final = html_template.replace("__DATOS_JSON__", json_data).replace("__MODO_VISTA__", st.session_state.modo_vista_color)
                 components.html(html_final, height=860)
 
@@ -1601,6 +1707,14 @@ def mostrar_movimientos():
             if pueden_fusionarse:
                 st.success(f"✅ El pallet destino quedará con **{u_ori + u_des:.0f} / {cap_max:.0f} unidades**.")
                 if st.button("🚀 Confirmar Tarea de Grúa (Fusión)", type="primary", use_container_width=True):
+                    # Guardar info de animación
+                    st.session_state.ultima_animacion = {
+                        "activa": True,
+                        "origen": {"x_pal": origen["x_pal"], "y": origen["y"], "z": origen["z"], "alt_p": origen.get("alt_p", 1.2)},
+                        "destino": {"x_pal": destino["x_pal"], "y": destino["y"], "z": destino["z"], "alt_p": destino.get("alt_p", 1.2)},
+                        "sku": sku_sel
+                    }
+                    
                     # EJECUTAR EL MOVIMIENTO LÓGICO
                     destino['unidades'] += origen['unidades']
                     destino['pct'] = destino['unidades'] / destino['cap_maxima']
